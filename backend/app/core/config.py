@@ -1,6 +1,6 @@
 import os
+from typing import Optional, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 class Settings(BaseSettings):
     PROJECT_NAME: str = "IntelliIncident"
     VERSION: str = "1.0.0"
@@ -18,7 +18,15 @@ class Settings(BaseSettings):
     SQLITE_DB_PATH: str = os.path.join(BACKEND_DIR, "data", "intelli_incident.db")
     MODELS_DIR: str = os.path.join(BACKEND_DIR, "models")
     DATA_DIR: str = os.path.join(BACKEND_DIR, "data")
-
-    model_config = SettingsConfigDict(case_sensitive=True)
-
+    # GitHub Integration Configuration
+    GITHUB_TOKEN: Optional[str] = None
+    GITHUB_REPO_OWNER: str = "124shubham2093-bit"
+    GITHUB_REPO_NAME: str = "IntelliIncident"
+    GITHUB_DEFAULT_BRANCH: str = "main"
+    GITHUB_API_URL: str = "https://api.github.com"
+    model_config = SettingsConfigDict(
+        case_sensitive=True,
+        env_file=(".env", "backend/.env"),
+        extra="ignore",
+    )
 settings = Settings()
