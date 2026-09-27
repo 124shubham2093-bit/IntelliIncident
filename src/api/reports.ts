@@ -1,6 +1,5 @@
 import { apiClient } from './client';
 import { IncidentDetails, RootCauseCandidate } from '@/types';
-import { getDemoIncidentDetails } from '@/data/demoIncidents';
 
 export interface IncidentReportResponse {
   incident: IncidentDetails;
@@ -11,40 +10,31 @@ export interface IncidentReportResponse {
 
 /**
  * Fetch formal incident post-mortem report data by incident ID.
- * Future endpoint: GET /api/reports/{id}
  */
 export async function getIncidentReport(
   incidentId: string
-): Promise<{ data: IncidentReportResponse; isDemo: boolean }> {
+): Promise<{ data: IncidentReportResponse | null; isDemo: boolean }> {
   try {
     const report = await apiClient<IncidentReportResponse>(`/api/reports/${incidentId}`);
     return { data: report, isDemo: false };
-  } catch {
-    const incident = getDemoIncidentDetails(incidentId);
-    return {
-      data: {
-        incident,
-        generatedAt: new Date().toISOString(),
-        reportId: `REP-${incidentId}-${Math.floor(Date.now() / 1000)}`,
-        summaryTitle: `Root Cause Analysis & Incident Post-Mortem: ${incident.title}`,
-      },
-      isDemo: true,
-    };
+  } catch (err) {
+    console.warn(`Report fetch failed for ${incidentId}:`, err);
+    return { data: null, isDemo: false };
   }
 }
 
 /**
  * Fetch evidence-based root cause rankings for an incident.
- * Future endpoint: GET /api/root-cause/{id}
  */
 export async function getRootCauseAnalysis(
   incidentId: string
 ): Promise<{ data: RootCauseCandidate[]; isDemo: boolean }> {
   try {
     const candidates = await apiClient<RootCauseCandidate[]>(`/api/root-cause/${incidentId}`);
-    return { data: candidates, isDemo: false };
-  } catch {
-    const incident = getDemoIncidentDetails(incidentId);
-    return { data: incident.rootCauseCandidates, isDemo: true };
+    return { data: candidates || [], isDemo: false };
+  } catch (err) {
+    console.warn(`RCA fetch failed for ${incidentId}:`, err);
+    return { data: [], isDemo: false };
   }
 }
+

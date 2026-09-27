@@ -74,3 +74,18 @@ def test_incident_report_api(client):
     assert "generatedAt" in data
     assert "reportId" in data
     assert "summaryTitle" in data
+
+def test_analyze_inc_8610_consistency(client):
+    response = client.post("/api/analyze/INC-8610")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["incidentId"] == "INC-8610"
+    assert data["fuzzyRisk"]["inputs"]["errorRateState"] == "HIGH"
+    triggered_ids = [r["id"] for r in data["fuzzyRisk"]["triggeredRules"]]
+    assert "RULE-06" not in triggered_ids
+    assert "RULE-11" in triggered_ids
+    assert data["fuzzyRisk"]["riskScore"] >= 50
+    assert "anomaly" in data
+    assert "detected" in data["anomaly"]
+    assert "score" in data["anomaly"]
+

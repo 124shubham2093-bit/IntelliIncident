@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -29,15 +29,12 @@ import { RiskBadge } from '@/components/Common/RiskBadge';
 import { StatusBadge } from '@/components/Common/StatusBadge';
 import { getIncidents } from '@/api/incidents';
 import { getDashboardChartData } from '@/api/analytics';
-import { DEMO_SERVICES_HEALTH } from '@/data/demoIncidents';
 import { Incident } from '@/types';
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const chartData = getDashboardChartData();
 
   useEffect(() => {
     async function loadData() {
@@ -49,12 +46,32 @@ export const DashboardPage: React.FC = () => {
     loadData();
   }, []);
 
+  const chartData = useMemo(() => getDashboardChartData(incidents), [incidents]);
+
   const activeCount = incidents.filter((i) => i.status !== 'RESOLVED').length;
   const criticalCount = incidents.filter((i) => i.severity === 'CRITICAL').length;
   const anomaliesCount = incidents.filter((i) => i.anomalyDetected).length;
-  const avgRisk = Math.round(
-    incidents.reduce((acc, curr) => acc + curr.riskScore, 0) / (incidents.length || 1)
-  );
+  const avgRisk = incidents.length > 0
+    ? Math.round(incidents.reduce((acc, curr) => acc + curr.riskScore, 0) / incidents.length)
+    : 0;
+
+  const servicesList = useMemo(() => {
+    if (incidents.length === 0) return [];
+    const map: Record<string, { service: string; status: string; incidentsCount: number; maxSeverity: string; lastSeen: string }> = {};
+    for (const inc of incidents) {
+      if (!map[inc.service]) {
+        map[inc.service] = {
+          service: inc.service,
+          status: inc.severity === 'CRITICAL' ? 'OUTAGE' : inc.severity === 'HIGH' ? 'DEGRADED' : 'ELEVATED',
+          incidentsCount: 0,
+          maxSeverity: inc.severity,
+          lastSeen: inc.timestamp ? inc.timestamp.substring(11, 16) + ' UTC' : 'Recently',
+        };
+      }
+      map[inc.service].incidentsCount += 1;
+    }
+    return Object.values(map);
+  }, [incidents]);
 
   return (
     <div className="space-y-6">
@@ -85,7 +102,7 @@ export const DashboardPage: React.FC = () => {
           subtitle="Currently open or under triage"
           icon={AlertTriangle}
           accentColor="amber"
-          trend={{ value: '+2 in 24h', isPositive: false, label: 'Unresolved' }}
+          trend={incidents.length > 0 ? { value: `${activeCount} active`, isPositive: activeCount === 0, label: 'Unresolved' } : { value: '0 Open', isPositive: true, label: 'Nominal' }}
         />
         <KpiCard
           title="Critical Incidents"
@@ -93,7 +110,7 @@ export const DashboardPage: React.FC = () => {
           subtitle="Tier-1 customer impact"
           icon={Flame}
           accentColor="rose"
-          trend={{ value: 'Immediate Action', isPositive: false, label: 'P1 Severity' }}
+          trend={incidents.length > 0 ? { value: `${criticalCount} critical`, isPositive: criticalCount === 0, label: 'P1 Severity' } : { value: '0 Critical', isPositive: true, label: 'Nominal' }}
         />
         <KpiCard
           title="Detected Anomalies"
@@ -101,7 +118,7 @@ export const DashboardPage: React.FC = () => {
           subtitle="Isolation Forest outliers"
           icon={Radio}
           accentColor="teal"
-          trend={{ value: 'Contamination 0.05', isPositive: true, label: 'ML Signal' }}
+          trend={incidents.length > 0 ? { value: `${anomaliesCount} flagged`, isPositive: anomaliesCount === 0, label: 'ML Signal' } : { value: '0 Outliers', isPositive: true, label: 'Inlier Baseline' }}
         />
         <KpiCard
           title="Average Risk Score"
@@ -109,7 +126,7 @@ export const DashboardPage: React.FC = () => {
           subtitle="Fuzzy inference composite"
           icon={Gauge}
           accentColor="blue"
-          trend={{ value: 'High Risk Cluster', isPositive: false, label: 'Soft Computing' }}
+          trend={incidents.length > 0 ? { value: `${avgRisk}/100`, isPositive: avgRisk < 50, label: 'Soft Computing' } : { value: '0/100', isPositive: true, label: 'Mamdani FIS' }}
         />
       </div>
 
@@ -130,51 +147,58 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData.trends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#14b8a6" stopOpacity={0.0} />
-                  </linearGradient>
-                  <linearGradient id="colorAnomalies" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="time" stroke="#64748b" fontSize={11} fontFamily="monospace" />
-                <YAxis stroke="#64748b" fontSize={11} fontFamily="monospace" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0f172a',
-                    border: '1px solid #334155',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontFamily: 'monospace',
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="total"
-                  name="Incidents"
-                  stroke="#14b8a6"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#colorTotal)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="anomalies"
-                  name="ML Anomalies"
-                  stroke="#f59e0b"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 2"
-                  fillOpacity={1}
-                  fill="url(#colorAnomalies)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {chartData.trends.length === 0 ? (
+              <div className="h-full w-full flex flex-col items-center justify-center text-xs font-mono text-slate-500 border border-dashed border-slate-800 rounded p-4 text-center">
+                <span>No incident telemetry recorded yet.</span>
+                <span className="text-[11px] text-slate-600 mt-1">Live incident trend and ML anomaly series will graph here when incidents are ingested.</span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData.trends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#14b8a6" stopOpacity={0.0} />
+                    </linearGradient>
+                    <linearGradient id="colorAnomalies" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="time" stroke="#64748b" fontSize={11} fontFamily="monospace" />
+                  <YAxis stroke="#64748b" fontSize={11} fontFamily="monospace" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      border: '1px solid #334155',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontFamily: 'monospace',
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="total"
+                    name="Incidents"
+                    stroke="#14b8a6"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorTotal)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="anomalies"
+                    name="ML Anomalies"
+                    stroke="#f59e0b"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 2"
+                    fillOpacity={1}
+                    fill="url(#colorAnomalies)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -189,27 +213,33 @@ export const DashboardPage: React.FC = () => {
               <span className="text-[10px] font-mono text-slate-400">Class Split</span>
             </div>
             <div className="h-28 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData.severityDistribution} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 2" stroke="#1e293b" />
-                  <XAxis dataKey="name" stroke="#64748b" fontSize={10} fontFamily="monospace" />
-                  <YAxis stroke="#64748b" fontSize={10} fontFamily="monospace" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#0f172a',
-                      border: '1px solid #334155',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      fontFamily: 'monospace',
-                    }}
-                  />
-                  <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                    {chartData.severityDistribution.map((entry, index) => (
-                      <Cell key={`sev-cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {incidents.length === 0 ? (
+                <div className="h-full w-full flex items-center justify-center text-xs font-mono text-slate-500 border border-dashed border-slate-800 rounded">
+                  No incidents available
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData.severityDistribution} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="2 2" stroke="#1e293b" />
+                    <XAxis dataKey="name" stroke="#64748b" fontSize={10} fontFamily="monospace" />
+                    <YAxis stroke="#64748b" fontSize={10} fontFamily="monospace" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#0f172a',
+                        border: '1px solid #334155',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontFamily: 'monospace',
+                      }}
+                    />
+                    <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                      {chartData.severityDistribution.map((entry, index) => (
+                        <Cell key={`sev-cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
 
@@ -222,27 +252,33 @@ export const DashboardPage: React.FC = () => {
               <span className="text-[10px] font-mono text-slate-400">Fuzzy Quantiles</span>
             </div>
             <div className="h-28 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData.riskDistribution} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 2" stroke="#1e293b" />
-                  <XAxis dataKey="name" stroke="#64748b" fontSize={10} fontFamily="monospace" />
-                  <YAxis stroke="#64748b" fontSize={10} fontFamily="monospace" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#0f172a',
-                      border: '1px solid #334155',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      fontFamily: 'monospace',
-                    }}
-                  />
-                  <Bar dataKey="count" radius={[3, 3, 0, 0]}>
-                    {chartData.riskDistribution.map((entry, index) => (
-                      <Cell key={`risk-cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {incidents.length === 0 ? (
+                <div className="h-full w-full flex items-center justify-center text-xs font-mono text-slate-500 border border-dashed border-slate-800 rounded">
+                  No risk evaluations recorded
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData.riskDistribution} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="2 2" stroke="#1e293b" />
+                    <XAxis dataKey="name" stroke="#64748b" fontSize={10} fontFamily="monospace" />
+                    <YAxis stroke="#64748b" fontSize={10} fontFamily="monospace" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#0f172a',
+                        border: '1px solid #334155',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontFamily: 'monospace',
+                      }}
+                    />
+                    <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                      {chartData.riskDistribution.map((entry, index) => (
+                        <Cell key={`risk-cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>
@@ -269,6 +305,10 @@ export const DashboardPage: React.FC = () => {
         <div className="mt-4 overflow-x-auto">
           {loading ? (
             <div className="py-8 text-center text-xs font-mono text-slate-400">Loading incidents...</div>
+          ) : incidents.length === 0 ? (
+            <div className="py-12 text-center text-xs font-mono text-slate-400">
+              No incidents available. Ingest or create an incident via POST /api/incidents to begin real-time analysis.
+            </div>
           ) : (
             <table className="w-full text-left border-collapse">
               <thead>
@@ -341,47 +381,53 @@ export const DashboardPage: React.FC = () => {
               </h3>
             </div>
             <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-              {DEMO_SERVICES_HEALTH.length} Services Monitored
+              {servicesList.length} Active Degraded Services
             </span>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs font-mono">
-              <thead>
-                <tr className="border-b border-slate-800 text-[11px] text-slate-400 uppercase">
-                  <th className="py-2.5 px-2">Service</th>
-                  <th className="py-2.5 px-2">Status</th>
-                  <th className="py-2.5 px-2">Error Rate</th>
-                  <th className="py-2.5 px-2">Latency</th>
-                  <th className="py-2.5 px-2 text-right">Last Deployment</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {DEMO_SERVICES_HEALTH.map((s) => (
-                  <tr key={s.service} className="hover:bg-slate-800/30">
-                    <td className="py-2.5 px-2 font-medium text-slate-200">{s.service}</td>
-                    <td className="py-2.5 px-2">
-                      <span
-                        className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                          s.status === 'HEALTHY'
-                            ? 'bg-teal-500/10 text-teal-400 border border-teal-500/30'
-                            : s.status === 'DEGRADED'
-                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
-                        }`}
-                      >
-                        {s.status}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-2 text-slate-300">{s.errorRate}%</td>
-                    <td className="py-2.5 px-2 text-slate-300">{s.latency}ms</td>
-                    <td className="py-2.5 px-2 text-right text-slate-400 text-[11px]">
-                      {s.lastDeployment}
-                    </td>
+            {servicesList.length === 0 ? (
+              <div className="py-12 text-center text-xs font-mono text-slate-400">
+                No active service degradation reported. All upstream topologies nominal.
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse text-xs font-mono">
+                <thead>
+                  <tr className="border-b border-slate-800 text-[11px] text-slate-400 uppercase">
+                    <th className="py-2.5 px-2">Service</th>
+                    <th className="py-2.5 px-2">Status</th>
+                    <th className="py-2.5 px-2">Incidents</th>
+                    <th className="py-2.5 px-2">Max Severity</th>
+                    <th className="py-2.5 px-2 text-right">Last Alert</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {servicesList.map((s) => (
+                    <tr key={s.service} className="hover:bg-slate-800/30">
+                      <td className="py-2.5 px-2 font-medium text-slate-200">{s.service}</td>
+                      <td className="py-2.5 px-2">
+                        <span
+                          className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                            s.status === 'HEALTHY'
+                              ? 'bg-teal-500/10 text-teal-400 border border-teal-500/30'
+                              : s.status === 'DEGRADED'
+                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                              : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                          }`}
+                        >
+                          {s.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-2 text-slate-300">{s.incidentsCount}</td>
+                      <td className="py-2.5 px-2 text-slate-300">{s.maxSeverity}</td>
+                      <td className="py-2.5 px-2 text-right text-slate-400 text-[11px]">
+                        {s.lastSeen}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 

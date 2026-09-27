@@ -215,57 +215,65 @@ export const IncidentsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {incidents.map((inc) => (
-                  <tr
-                    key={inc.id}
-                    onClick={() => navigate(`/incidents/${inc.id}`)}
-                    className="hover:bg-slate-800/40 transition-colors cursor-pointer group"
-                  >
-                    <td className="py-3.5 px-4 font-bold text-teal-400 group-hover:underline">
-                      {inc.id}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-400 text-[11px]">
-                      {new Date(inc.timestamp).toLocaleDateString([], {
-                        month: 'short',
-                        day: 'numeric',
-                      })}{' '}
-                      {new Date(inc.timestamp).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-200 font-sans font-medium">
-                      {inc.service}
-                    </td>
-                    <td className="py-3.5 px-4 font-sans text-slate-300 max-w-xs truncate">
-                      {inc.title}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <SeverityBadge severity={inc.severity} size="sm" />
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <RiskBadge risk={inc.risk} score={inc.riskScore} showScore />
-                    </td>
-                    <td className="py-3.5 px-4">
-                      {inc.anomalyDetected ? (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] text-rose-400 font-semibold">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                          Anomaly ({(inc.anomalyScore).toFixed(2)})
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">Normal</span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <StatusBadge status={inc.status} />
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <span className="inline-flex items-center gap-1 text-teal-400 group-hover:text-teal-300 font-medium">
-                        Investigate <ArrowRight className="w-3.5 h-3.5" />
-                      </span>
+                {incidents.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-16 text-center text-xs font-mono text-slate-400">
+                      No incidents available. Use POST /api/incidents to ingest live telemetry.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  incidents.map((inc) => (
+                    <tr
+                      key={inc.id}
+                      onClick={() => navigate(`/incidents/${inc.id}`)}
+                      className="hover:bg-slate-800/40 transition-colors cursor-pointer group"
+                    >
+                      <td className="py-3.5 px-4 font-bold text-teal-400 group-hover:underline">
+                        {inc.id}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-400 text-[11px]">
+                        {new Date(inc.timestamp).toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric',
+                        })}{' '}
+                        {new Date(inc.timestamp).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-200 font-sans font-medium">
+                        {inc.service}
+                      </td>
+                      <td className="py-3.5 px-4 font-sans text-slate-300 max-w-xs truncate">
+                        {inc.title}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <SeverityBadge severity={inc.severity} size="sm" />
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <RiskBadge risk={inc.risk} score={inc.riskScore} showScore />
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {inc.anomalyDetected ? (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] text-rose-400 font-semibold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                            Anomaly ({(inc.anomalyScore).toFixed(2)})
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">Normal</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <StatusBadge status={inc.status} />
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <span className="inline-flex items-center gap-1 text-teal-400 group-hover:text-teal-300 font-medium">
+                          Investigate <ArrowRight className="w-3.5 h-3.5" />
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           )}

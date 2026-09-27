@@ -43,3 +43,18 @@ async def get_features():
         return severity_classifier.get_feature_importances()
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+@router.get("/confusion-matrix")
+async def get_confusion_matrix():
+    meta = load_metadata()
+    if meta and "confusionMatrix" in meta:
+        return meta["confusionMatrix"]
+    raise HTTPException(status_code=503, detail="Trained model confusion matrix is unavailable.")
+
+@router.get("/anomaly-distribution")
+async def get_anomaly_distribution():
+    meta = load_metadata()
+    if meta and "anomalyDistribution" in meta:
+        return meta["anomalyDistribution"]
+    raise HTTPException(status_code=503, detail="Trained model anomaly distribution is unavailable.")
+

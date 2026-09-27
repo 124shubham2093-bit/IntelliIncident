@@ -7,31 +7,40 @@ import { SeverityBadge } from '@/components/Common/SeverityBadge';
 import { RiskBadge } from '@/components/Common/RiskBadge';
 import { StatusBadge } from '@/components/Common/StatusBadge';
 import { MembershipChart } from '@/components/Fuzzy/MembershipChart';
-import { getFuzzyMembershipDefinitions, getFuzzyRuleBase } from '@/api/fuzzy';
+import { getFuzzyMembershipDefinitions, getFuzzyRuleBase, evaluateFuzzyRisk } from '@/api/fuzzy';
 import { getIncidents, getIncidentById } from '@/api/incidents';
-import { Incident, IncidentDetails } from '@/types';
+import { Incident, IncidentDetails, FuzzyRiskResult } from '@/types';
 
 export const FuzzyRiskPage: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [selectedId, setSelectedId] = useState<string>('INC-8492');
+  const [selectedId, setSelectedId] = useState<string>('');
   const [incidentDetail, setIncidentDetail] = useState<IncidentDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Optional what-if simulation toggle
+  // Simulation & standalone interactive crisp values
   const [showSimulation, setShowSimulation] = useState(false);
-  const [simulatedErrorRate, setSimulatedErrorRate] = useState<number>(24);
-  const [simulatedLatency, setSimulatedLatency] = useState<number>(1840);
-  const [simulatedImpact, setSimulatedImpact] = useState<number>(85);
+  const [simErrorRate, setSimErrorRate] = useState<number>(18.5);
+  const [simLatency, setSimLatency] = useState<number>(1250);
+  const [simImpact, setSimImpact] = useState<number>(65);
+  const [simRecency, setSimRecency] = useState<number>(15);
+  const [simCriticality, setSimCriticality] = useState<number>(3);
+
+  const [evaluatedFuzzy, setEvaluatedFuzzy] = useState<FuzzyRiskResult | null>(null);
 
   const membershipDefs = getFuzzyMembershipDefinitions();
   const ruleBase = getFuzzyRuleBase();
 
   useEffect(() => {
     async function loadIncidents() {
+      setLoading(true);
       const res = await getIncidents();
       setIncidents(res.data);
-      if (res.data.length > 0 && !res.data.some((i) => i.id === selectedId)) {
+      if (res.data.length > 0) {
         setSelectedId(res.data[0].id);
+      } else {
+        setSelectedId('');
+        setIncidentDetail(null);
+        setLoading(false);
       }
     }
     loadIncidents();
@@ -39,42 +48,105 @@ export const FuzzyRiskPage: React.FC = () => {
 
   useEffect(() => {
     async function loadDetail() {
-      if (!selectedId) return;
+      if (!selectedId) {
+        setIncidentDetail(null);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       const res = await getIncidentById(selectedId);
       setIncidentDetail(res.data);
       if (res.data) {
-        setSimulatedErrorRate(res.data.metrics.errorRate);
-        setSimulatedLatency(res.data.metrics.latencyP99);
-        setSimulatedImpact(res.data.metrics.affectedUsers > 10000 ? 85 : 45);
+        setSimErrorRate(res.data.metrics.errorRate);
+        setSimLatency(res.data.metrics.latencyP99);
+        setSimImpact(
+          res.data.metrics.affectedUsers > 10000
+            ? 85
+            : res.data.metrics.affectedUsers > 3000
+            ? 50
+            : 20
+        );
+        setSimRecency(res.data.metrics.deploymentRecencyMinutes);
+        setSimCriticality(res.data.service.toLowerCase().includes('payment') ? 4 : 3);
       }
       setLoading(false);
     }
     loadDetail();
   }, [selectedId]);
 
-  if (!incidentDetail && loading) {
+  // Compute fuzzy risk dynamically via POST /api/fuzzy-risk when in standalone mode or simulation
+  useEffect(() => {
+    let active = true;
+    async function recompute() {
+      if (!incidentDetail || showSimulation) {
+        try {
+          const res = await evaluateFuzzyRisk({
+            errorRate: simErrorRate,
+            latency: simLatency,
+            userImpact: simImpact,
+            deploymentRecency: simRecency,
+            serviceCriticality: simCriticality,
+          });
+          if (active && res.data) {
+            setEvaluatedFuzzy(res.data);
+          }
+        } catch (err) {
+          console.warn('Fuzzy evaluation error:', err);
+        }
+      }
+    }
+    recompute();
+    return () => {
+      active = false;
+    };
+  }, [incidentDetail, showSimulation, simErrorRate, simLatency, simImpact, simRecency, simCriticality]);
+
+  const fuzzy: FuzzyRiskResult | null =
+    incidentDetail && !showSimulation ? incidentDetail.fuzzyRisk : evaluatedFuzzy;
+
+  const activeErrorRate = incidentDetail && !showSimulation
+    ? incidentDetail.metrics.errorRate
+    : simErrorRate;
+
+  const activeLatency = incidentDetail && !showSimulation
+    ? incidentDetail.metrics.latencyP99
+    : simLatency;
+
+  const activeImpact = incidentDetail && !showSimulation
+    ? incidentDetail.metrics.affectedUsers > 10000
+      ? 85
+      : incidentDetail.metrics.affectedUsers > 3000
+      ? 50
+      : 20
+    : simImpact;
+
+  const activeRecency = incidentDetail && !showSimulation
+    ? incidentDetail.metrics.deploymentRecencyMinutes
+    : simRecency;
+
+  const activeCriticalityTier = incidentDetail && !showSimulation
+    ? incidentDetail.service.toLowerCase().includes('payment') ? 4 : 3
+    : simCriticality;
+
+  const activeServiceLabel = incidentDetail && !showSimulation
+    ? incidentDetail.service
+    : simCriticality === 1
+    ? 'Internal / Non-Critical'
+    : simCriticality === 2
+    ? 'Standard Service'
+    : simCriticality === 3
+    ? 'Core Business API'
+    : simCriticality === 4
+    ? 'Tier-1 Gateway / Auth'
+    : 'Mission Critical Transaction Core';
+
+  if (!fuzzy || loading) {
     return (
       <div className="py-20 text-center font-mono text-sm text-slate-400">
         Loading fuzzy risk assessment workspace...
       </div>
     );
   }
-
-  const detail = incidentDetail!;
-  const fuzzy = detail.fuzzyRisk;
-  const metrics = detail.metrics;
-
-  // Active crisp values (either direct telemetry or simulation if active)
-  const activeErrorRate = showSimulation ? simulatedErrorRate : metrics.errorRate;
-  const activeLatency = showSimulation ? simulatedLatency : metrics.latencyP99;
-  const activeImpact = showSimulation
-    ? simulatedImpact
-    : metrics.affectedUsers > 10000
-    ? 85
-    : metrics.affectedUsers > 3000
-    ? 50
-    : 20;
 
   return (
     <div className="space-y-6">
@@ -93,62 +165,100 @@ export const FuzzyRiskPage: React.FC = () => {
           <select
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
-            className="bg-slate-950 border border-slate-700 rounded-md px-3 py-1.5 text-xs font-mono text-teal-300 font-semibold focus:outline-none focus:border-teal-500 cursor-pointer"
+            disabled={incidents.length === 0}
+            className="bg-slate-950 border border-slate-700 rounded-md px-3 py-1.5 text-xs font-mono text-teal-300 font-semibold focus:outline-none focus:border-teal-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
-            {incidents.map((inc) => (
-              <option key={inc.id} value={inc.id}>
-                {inc.id} — {inc.service} ({inc.severity})
-              </option>
-            ))}
+            {incidents.length === 0 ? (
+              <option value="">No incidents stored (Standalone Mode)</option>
+            ) : (
+              incidents.map((inc) => (
+                <option key={inc.id} value={inc.id}>
+                  {inc.id} — {inc.service} ({inc.severity})
+                </option>
+              ))
+            )}
           </select>
 
-          <button
-            type="button"
-            onClick={() => setShowSimulation(!showSimulation)}
-            className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors cursor-pointer flex items-center gap-1.5 ${
-              showSimulation
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800'
-            }`}
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>{showSimulation ? 'Exit Simulation' : 'Scenario Simulation'}</span>
-          </button>
+          {incidentDetail && (
+            <button
+              type="button"
+              onClick={() => setShowSimulation(!showSimulation)}
+              className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                showSimulation
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                  : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border-slate-800'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>{showSimulation ? 'Exit Simulation' : 'Scenario Simulation'}</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* A. Selected Incident Header Card */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-lg font-bold font-mono text-teal-400">{detail.id}</span>
-              <span className="text-xs font-mono text-slate-300 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                Service: {detail.service}
-              </span>
-              <SeverityBadge severity={detail.severity} size="sm" />
-              <StatusBadge status={detail.status} />
+      {/* A. Selected Incident Header Card / Standalone Info Banner */}
+      {incidentDetail ? (
+        <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="text-lg font-bold font-mono text-teal-400">{incidentDetail.id}</span>
+                <span className="text-xs font-mono text-slate-300 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                  Service: {incidentDetail.service}
+                </span>
+                <SeverityBadge severity={incidentDetail.severity} size="sm" />
+                <StatusBadge status={incidentDetail.status} />
+              </div>
+              <h2 className="text-sm sm:text-base font-semibold text-slate-100 font-sans">
+                {incidentDetail.title}
+              </h2>
+              <p className="text-xs text-slate-400 leading-relaxed max-w-4xl font-sans">
+                {incidentDetail.summary}
+              </p>
             </div>
-            <h2 className="text-sm sm:text-base font-semibold text-slate-100 font-sans">
-              {detail.title}
-            </h2>
-            <p className="text-xs text-slate-400 leading-relaxed max-w-4xl font-sans">
-              {detail.summary}
-            </p>
-          </div>
 
-          <div className="bg-slate-950/80 border border-slate-800 p-3 rounded text-xs font-mono space-y-1 shrink-0">
-            <div className="flex justify-between gap-4 text-slate-400">
-              <span>Timestamp:</span>
-              <span className="text-slate-200">{detail.timestamp.substring(11, 19)} UTC</span>
-            </div>
-            <div className="flex justify-between gap-4 text-slate-400">
-              <span>Inference Method:</span>
-              <span className="text-teal-400">Mamdani Min-Max</span>
+            <div className="bg-slate-950/80 border border-slate-800 p-3 rounded text-xs font-mono space-y-1 shrink-0">
+              <div className="flex justify-between gap-4 text-slate-400">
+                <span>Timestamp:</span>
+                <span className="text-slate-200">{incidentDetail.timestamp.substring(11, 19)} UTC</span>
+              </div>
+              <div className="flex justify-between gap-4 text-slate-400">
+                <span>Inference Method:</span>
+                <span className="text-teal-400">Mamdani Min-Max</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold text-teal-400 uppercase tracking-wider bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/30">
+                  Standalone Soft Computing Workspace
+                </span>
+                <span className="text-xs font-mono text-slate-400">Real-Data Mode (Empty DB)</span>
+              </div>
+              <h2 className="text-base font-semibold text-slate-100 font-sans">
+                Interactive Mamdani Fuzzy Inference Engine
+              </h2>
+              <p className="text-xs text-slate-400 font-sans leading-relaxed">
+                Adjust the crisp operational inputs below to evaluate real-time set memberships, rule firing strengths, and centroid defuzzification directly against <code className="text-teal-400 font-mono">POST /api/fuzzy-risk</code>.
+              </p>
+            </div>
+            <div className="bg-slate-950/80 border border-slate-800 p-3 rounded text-xs font-mono space-y-1 shrink-0">
+              <div className="flex justify-between gap-4 text-slate-400">
+                <span>Engine:</span>
+                <span className="text-teal-400">scikit-fuzzy Mamdani</span>
+              </div>
+              <div className="flex justify-between gap-4 text-slate-400">
+                <span>Defuzzification:</span>
+                <span className="text-slate-200">Centroid of Area (COA)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pipeline Stage Architecture Bar */}
       <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-3 overflow-x-auto">
@@ -231,39 +341,89 @@ export const FuzzyRiskPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Simulation controls when toggled */}
-            {showSimulation && (
+            {/* Simulation controls when toggled or in standalone mode */}
+            {(showSimulation || !incidentDetail) && (
               <div className="mt-4 pt-4 border-t border-slate-800 space-y-3 font-mono text-xs">
                 <div className="flex items-center justify-between text-amber-300 text-[11px] font-semibold">
-                  <span>What-If Telemetry Simulation</span>
+                  <span>
+                    {!incidentDetail
+                      ? 'Interactive Crisp Signal Controls'
+                      : 'What-If Telemetry Simulation'}
+                  </span>
                   <span className="text-[10px] bg-amber-500/20 px-1.5 py-0.5 rounded">Active</span>
                 </div>
 
                 <div>
                   <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                    <span>Simulated Error Rate: {simulatedErrorRate}%</span>
+                    <span>Error Rate: {simErrorRate}%</span>
                   </div>
                   <input
                     type="range"
                     min="0"
                     max="50"
-                    value={simulatedErrorRate}
-                    onChange={(e) => setSimulatedErrorRate(parseFloat(e.target.value))}
+                    step="0.5"
+                    value={simErrorRate}
+                    onChange={(e) => setSimErrorRate(parseFloat(e.target.value))}
                     className="w-full accent-teal-500 bg-slate-950 h-1.5 rounded cursor-pointer"
                   />
                 </div>
 
                 <div>
                   <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                    <span>Simulated P99 Latency: {simulatedLatency}ms</span>
+                    <span>P99 Latency: {simLatency}ms</span>
                   </div>
                   <input
                     type="range"
                     min="0"
                     max="3000"
-                    step="50"
-                    value={simulatedLatency}
-                    onChange={(e) => setSimulatedLatency(parseFloat(e.target.value))}
+                    step="25"
+                    value={simLatency}
+                    onChange={(e) => setSimLatency(parseFloat(e.target.value))}
+                    className="w-full accent-teal-500 bg-slate-950 h-1.5 rounded cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+                    <span>User Impact Index: {simImpact}/100</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={simImpact}
+                    onChange={(e) => setSimImpact(parseFloat(e.target.value))}
+                    className="w-full accent-teal-500 bg-slate-950 h-1.5 rounded cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+                    <span>Deployment Recency: {simRecency}m ago</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="120"
+                    step="1"
+                    value={simRecency}
+                    onChange={(e) => setSimRecency(parseFloat(e.target.value))}
+                    className="w-full accent-teal-500 bg-slate-950 h-1.5 rounded cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-400 mb-1">
+                    <span>Service Criticality: Tier {simCriticality}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="5"
+                    step="1"
+                    value={simCriticality}
+                    onChange={(e) => setSimCriticality(parseInt(e.target.value))}
                     className="w-full accent-teal-500 bg-slate-950 h-1.5 rounded cursor-pointer"
                   />
                 </div>
@@ -331,7 +491,7 @@ export const FuzzyRiskPage: React.FC = () => {
                     {fuzzy.inputs.errorRateState}
                   </span>
                 </div>
-                <span className="text-[10px] text-slate-500 block">Set Membership: \(\mu = 0.94\)</span>
+                <span className="text-[10px] text-slate-500 block">Fuzzified Crisp Signal</span>
               </div>
 
               {/* P99 Latency */}
@@ -347,7 +507,7 @@ export const FuzzyRiskPage: React.FC = () => {
                     {fuzzy.inputs.latencyState}
                   </span>
                 </div>
-                <span className="text-[10px] text-slate-500 block">Set Membership: \(\mu = 0.88\)</span>
+                <span className="text-[10px] text-slate-500 block">Fuzzified Crisp Signal</span>
               </div>
 
               {/* User Impact */}
@@ -357,7 +517,9 @@ export const FuzzyRiskPage: React.FC = () => {
                 </span>
                 <div className="flex items-baseline justify-between">
                   <span className="text-base font-bold text-slate-200">
-                    {metrics.affectedUsers.toLocaleString()}
+                    {incidentDetail
+                      ? incidentDetail.metrics.affectedUsers.toLocaleString()
+                      : `${activeImpact}/100`}
                   </span>
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">
                     {fuzzy.inputs.userImpactState}
@@ -373,13 +535,13 @@ export const FuzzyRiskPage: React.FC = () => {
                 </span>
                 <div className="flex items-baseline justify-between">
                   <span className="text-base font-bold text-cyan-400">
-                    {metrics.deploymentRecencyMinutes}m ago
+                    {activeRecency}m ago
                   </span>
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
                     {fuzzy.inputs.deploymentRecencyState}
                   </span>
                 </div>
-                <span className="text-[10px] text-slate-500 block">Set Membership: \(\mu = 0.95\)</span>
+                <span className="text-[10px] text-slate-500 block">Temporal Proximity</span>
               </div>
 
               {/* Service Criticality */}
@@ -389,13 +551,13 @@ export const FuzzyRiskPage: React.FC = () => {
                 </span>
                 <div className="flex items-baseline justify-between">
                   <span className="text-base font-bold text-slate-200">
-                    Tier-1 (Financial Payment Gateway)
+                    Tier-{activeCriticalityTier} ({activeServiceLabel})
                   </span>
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30">
                     {fuzzy.inputs.serviceCriticalityState}
                   </span>
                 </div>
-                <span className="text-[10px] text-slate-500 block">Core Transaction Pipeline SLA</span>
+                <span className="text-[10px] text-slate-500 block">Operational SLA Weight</span>
               </div>
             </div>
           </div>

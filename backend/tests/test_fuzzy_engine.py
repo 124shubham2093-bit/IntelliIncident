@@ -45,3 +45,34 @@ def test_fuzzy_risk_engine_high_monotonicity():
     assert len(crit_res["triggeredRules"]) > 0
     for rule in crit_res["triggeredRules"]:
         assert 0.0 <= rule["weight"] <= 1.0
+
+def test_fuzzy_risk_engine_inc_8610_consistency():
+    engine = FuzzyRiskEngine()
+    inc_inputs = {
+        "errorRate": 42.19,
+        "userImpact": 16.0,
+        "latency": 514.3,
+        "deploymentRecency": 102.0,
+        "serviceCriticality": 3.0,
+    }
+    result = engine.evaluate(inc_inputs)
+    assert result["inputs"]["errorRateState"] == "HIGH"
+    triggered_ids = [r["id"] for r in result["triggeredRules"]]
+    assert "RULE-06" not in triggered_ids
+    assert "RULE-11" in triggered_ids
+    assert "RULE-13" in triggered_ids
+    assert result["riskScore"] >= 50
+
+def test_fuzzy_risk_engine_no_false_rule_06_on_high_error():
+    engine = FuzzyRiskEngine()
+    for high_err in [25.0, 35.0, 42.19, 49.0]:
+        result = engine.evaluate({
+            "errorRate": high_err,
+            "userImpact": 10.0,
+            "latency": 200.0,
+            "deploymentRecency": 120.0,
+            "serviceCriticality": 3.0,
+        })
+        triggered_ids = [r["id"] for r in result["triggeredRules"]]
+        assert "RULE-06" not in triggered_ids, f"RULE-06 fired with errorRate={high_err}"
+

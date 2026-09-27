@@ -16,16 +16,21 @@ import { Incident, IncidentDetails } from '@/types';
 
 export const InvestigationPage: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [selectedId, setSelectedId] = useState<string>('INC-8492');
+  const [selectedId, setSelectedId] = useState<string>('');
   const [incidentDetail, setIncidentDetail] = useState<IncidentDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadIncidents() {
+      setLoading(true);
       const res = await getIncidents();
       setIncidents(res.data);
-      if (res.data.length > 0 && !res.data.some((i) => i.id === selectedId)) {
+      if (res.data.length > 0) {
         setSelectedId(res.data[0].id);
+      } else {
+        setSelectedId('');
+        setIncidentDetail(null);
+        setLoading(false);
       }
     }
     loadIncidents();
@@ -33,7 +38,11 @@ export const InvestigationPage: React.FC = () => {
 
   useEffect(() => {
     async function loadDetail() {
-      if (!selectedId) return;
+      if (!selectedId) {
+        setIncidentDetail(null);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       const res = await getIncidentById(selectedId);
       setIncidentDetail(res.data);
@@ -60,20 +69,38 @@ export const InvestigationPage: React.FC = () => {
           <select
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
-            className="bg-slate-950 border border-slate-700 rounded-md px-3 py-1.5 text-xs font-mono text-teal-300 font-semibold focus:outline-none focus:border-teal-500"
+            disabled={incidents.length === 0}
+            className="bg-slate-950 border border-slate-700 rounded-md px-3 py-1.5 text-xs font-mono text-teal-300 font-semibold focus:outline-none focus:border-teal-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
-            {incidents.map((inc) => (
-              <option key={inc.id} value={inc.id}>
-                {inc.id} — {inc.service} ({inc.severity})
-              </option>
-            ))}
+            {incidents.length === 0 ? (
+              <option value="">No incidents available</option>
+            ) : (
+              incidents.map((inc) => (
+                <option key={inc.id} value={inc.id}>
+                  {inc.id} — {inc.service} ({inc.severity})
+                </option>
+              ))
+            )}
           </select>
         </div>
       </div>
 
       {loading ? (
         <div className="py-16 text-center font-mono text-xs text-slate-400">
-          Correlating operational signals and causal evidence for {selectedId}...
+          Correlating operational signals and causal evidence for {selectedId || 'incident'}...
+        </div>
+      ) : incidents.length === 0 ? (
+        <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-12 text-center max-w-xl mx-auto space-y-4 my-8">
+          <div className="w-12 h-12 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center mx-auto text-slate-400">
+            <Layers className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold text-slate-200">No Incidents Available for Investigation</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-sans">
+              The system database is currently operating in real-data mode with no incidents recorded.
+              Ingest telemetry or submit an incident via <code className="text-teal-400 font-mono">POST /api/incidents</code> to inspect causal inference, timeline events, and automated root cause analysis.
+            </p>
+          </div>
         </div>
       ) : incidentDetail && (
         <>

@@ -1,7 +1,7 @@
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 
-from backend.app.schemas.incident import Incident, IncidentDetails
+from backend.app.schemas.incident import Incident, IncidentDetails, IncidentCreatePayload
 from backend.app.services.incident_service import IncidentService
 
 router = APIRouter(tags=["Incidents"])
@@ -22,6 +22,14 @@ async def list_incidents(
         service=service,
         status=status,
     )
+
+@router.post("/incidents", response_model=IncidentDetails, status_code=status.HTTP_201_CREATED)
+async def create_incident(payload: IncidentCreatePayload):
+    try:
+        created = incident_service.create_incident(payload)
+        return created
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to ingest incident: {str(e)}")
 
 @router.get("/incidents/{incident_id}", response_model=IncidentDetails)
 async def get_incident(incident_id: str):
