@@ -17,6 +17,9 @@ export interface Incident {
   timestamp: string; // ISO 8601
   summary: string;
   affectedUsersCount: number;
+  projectId?: string | null;
+  applicationId?: string | null;
+  environmentId?: string | null;
 }
 
 export interface IncidentMetrics {
@@ -264,4 +267,87 @@ export interface IncidentAnalysis {
   fuzzyRisk: FuzzyRiskResult;
   rootCauses: RootCauseCandidate[];
   recommendations: Recommendation[];
+}
+
+// ==========================================
+// Project, Application, Environment Topology Types
+// ==========================================
+
+export interface Project {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  application_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Application {
+  id: string;
+  project_id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  language: string;
+  framework?: string | null;
+  repo_owner?: string | null;
+  repo_name?: string | null;
+  default_branch: string;
+  environment_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Environment {
+  id: string;
+  application_id: string;
+  name: string;
+  slug: string;
+  api_key_preview: string;
+  api_key?: string | null; // Populated only immediately after creation or regeneration
+  endpoint_url?: string | null;
+  current_commit?: string | null;
+  is_production: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EnvironmentApiKeyRegenerateResponse {
+  id: string;
+  api_key: string;
+  api_key_preview: string;
+  message: string;
+}
+
+export interface ConnectionSnippet {
+  language: string;
+  title: string;
+  code: string;
+}
+
+export interface ConnectionGuide {
+  environment_id: string;
+  environment_name: string;
+  application_id: string;
+  application_name: string;
+  project_id: string;
+  project_name: string;
+  ingestion_endpoint: string;
+  api_key_preview: string;
+  curl_snippet: string;
+  python_snippet: string;
+  node_snippet: string;
+  github_actions_snippet: string;
+  explanation: string;
+}
+
+export interface IngestionTestResult {
+  status: string;
+  environment_id: string;
+  environment_name: string;
+  application_name: string;
+  project_name: string;
+  authenticated: boolean;
+  message: string;
 }

@@ -15,6 +15,7 @@ from backend.app.fuzzy.fuzzy_engine import FuzzyRiskEngine
 from backend.app.rca.root_cause_engine import RootCauseEngine
 from backend.app.services.recommendation_service import RecommendationService
 from backend.app.services.github_service import GitHubService
+from backend.app.services.project_service import ProjectService
 from backend.app.schemas.incident import IncidentCreatePayload
 
 HEX_COMMIT_REGEX = re.compile(r"^[0-9a-fA-F]{7,40}$")
@@ -27,6 +28,7 @@ class IncidentService:
         self.fuzzy_engine = FuzzyRiskEngine()
         self.root_cause_engine = RootCauseEngine()
         self.github_service = GitHubService()
+        self.project_service = ProjectService()
 
     @staticmethod
     def _is_valid_commit_hash(sha: Optional[str]) -> bool:
@@ -37,9 +39,26 @@ class IncidentService:
             return False
         return bool(HEX_COMMIT_REGEX.match(sha_clean))
 
-    async def _fetch_deployment_commits(self, deployments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def _fetch_deployment_commits(
+        self,
+        deployments: List[Dict[str, Any]],
+        repo_owner: Optional[str] = None,
+        repo_name: Optional[str] = None,
+        default_branch: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         commits = []
         seen_shas = set()
+
+        # Application-scoped GitHub repository binding with fallback to global settings
+        if repo_owner and repo_name:
+            gh_service = GitHubService(
+                owner=repo_owner,
+                repo=repo_name,
+                default_branch=default_branch or "main",
+            )
+        else:
+            gh_service = self.github_service
+
         for dep in deployments:
             sha = dep.get("commit_hash")
             if not self._is_valid_commit_hash(sha):
@@ -49,7 +68,7 @@ class IncidentService:
                 continue
             seen_shas.add(sha_clean)
             try:
-                commit_detail = await self.github_service.get_commit(sha_clean)
+                commit_detail = await gh_service.get_commit(sha_clean)
                 if commit_detail:
                     c_dict = (
                         commit_detail.model_dump()
@@ -106,6 +125,10 @@ class IncidentService:
 
         result = []
         for r in rows:
+            keys = r.keys()
+            p_id = r["project_id"] if "project_id" in keys else None
+            a_id = r["application_id"] if "application_id" in keys else None
+            e_id = r["environment_id"] if "environment_id" in keys else None
             result.append({
                 "id": r["id"],
                 "title": r["title"],
@@ -119,6 +142,12 @@ class IncidentService:
                 "timestamp": r["timestamp"],
                 "summary": r["summary"],
                 "affectedUsersCount": r["affected_users_count"],
+                "projectId": p_id,
+                "applicationId": a_id,
+                "environmentId": e_id,
+                "project_id": p_id,
+                "application_id": a_id,
+                "environment_id": e_id,
             })
         return result
 
@@ -222,7 +251,39 @@ class IncidentService:
 
         # Root Cause Analysis with GitHub Commit Evidence
         incident_dict = dict(inc_row)
-        github_commits = await self._fetch_deployment_commits(deps_list)
+        inc_keys = inc_row.keys()
+        p_id = inc_row["project_id"] if "project_id" in inc_keys else None
+        a_id = inc_row["application_id"] if "application_id" in inc_keys else None
+        e_id = inc_row["environment_id"] if "environment_id" in inc_keys else None
+
+        # Resolve application-scoped GitHub repo
+        repo_owner = None
+        repo_name = None
+        default_branch = None
+        if a_id:
+            app_rec = self.project_service.get_application_by_id(a_id)
+            if app_rec and app_rec.get("repo_owner") and app_rec.get("repo_name"):
+                repo_owner = app_rec["repo_owner"]
+                repo_name = app_rec["repo_name"]
+                default_branch = app_rec.get("default_branch") or "main"
+        if not repo_owner:
+            app_resolved = self.project_service.resolve_service_application(inc_row["service"])
+            if app_resolved:
+                if not a_id:
+                    a_id = app_resolved["id"]
+                if not p_id:
+                    p_id = app_resolved["project_id"]
+                if app_resolved.get("repo_owner") and app_resolved.get("repo_name"):
+                    repo_owner = app_resolved["repo_owner"]
+                    repo_name = app_resolved["repo_name"]
+                    default_branch = app_resolved.get("default_branch") or "main"
+
+        github_commits = await self._fetch_deployment_commits(
+            deps_list,
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            default_branch=default_branch,
+        )
         root_causes = self.root_cause_engine.analyze(
             incident=incident_dict,
             metrics=metrics,
@@ -254,6 +315,12 @@ class IncidentService:
             "timestamp": inc_row["timestamp"],
             "summary": inc_row["summary"],
             "affectedUsersCount": inc_row["affected_users_count"],
+            "projectId": p_id,
+            "applicationId": a_id,
+            "environmentId": e_id,
+            "project_id": p_id,
+            "application_id": a_id,
+            "environment_id": e_id,
             "metrics": metrics,
             "mlAnalysis": {
                 "anomaly": anomaly_res,
@@ -401,7 +468,35 @@ class IncidentService:
             "title": payload.title,
             "severity": predicted_severity,
         }
-        github_commits = await self._fetch_deployment_commits(deps_list)
+
+        # Resolve topology associations
+        p_id = payload.project_id or payload.projectId
+        a_id = payload.application_id or payload.applicationId
+        e_id = payload.environment_id or payload.environmentId
+
+        if not a_id:
+            resolved_app = self.project_service.resolve_service_application(payload.service)
+            if resolved_app:
+                a_id = resolved_app["id"]
+                if not p_id:
+                    p_id = resolved_app["project_id"]
+
+        repo_owner = None
+        repo_name = None
+        default_branch = None
+        if a_id:
+            app_rec = self.project_service.get_application_by_id(a_id)
+            if app_rec and app_rec.get("repo_owner") and app_rec.get("repo_name"):
+                repo_owner = app_rec["repo_owner"]
+                repo_name = app_rec["repo_name"]
+                default_branch = app_rec.get("default_branch") or "main"
+
+        github_commits = await self._fetch_deployment_commits(
+            deps_list,
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            default_branch=default_branch,
+        )
         root_causes = self.root_cause_engine.analyze(
             incident=temp_inc,
             metrics=metrics_dict,
@@ -424,8 +519,9 @@ class IncidentService:
         INSERT OR REPLACE INTO incidents (
             id, title, service, severity, risk, risk_score,
             anomaly_detected, anomaly_score, status, timestamp,
-            summary, affected_users_count, root_cause_category
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            summary, affected_users_count, root_cause_category,
+            project_id, application_id, environment_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             incident_id,
             payload.title,
@@ -440,6 +536,9 @@ class IncidentService:
             summary,
             affected_users_count,
             top_category,
+            p_id,
+            a_id,
+            e_id,
         ))
 
         # Insert or replace metrics record

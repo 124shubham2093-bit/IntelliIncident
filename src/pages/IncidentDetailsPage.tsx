@@ -109,6 +109,18 @@ export const IncidentDetailsPage: React.FC = () => {
               <span>Service:</span>
               <span className="text-slate-200 font-semibold">{incident.service}</span>
             </div>
+            {incident.projectId && (
+              <div className="flex justify-between text-slate-400">
+                <span>Project:</span>
+                <span className="text-teal-400 font-semibold">{incident.projectId}</span>
+              </div>
+            )}
+            {incident.environmentId && (
+              <div className="flex justify-between text-slate-400">
+                <span>Environment:</span>
+                <span className="text-cyan-400 font-semibold">{incident.environmentId}</span>
+              </div>
+            )}
             <div className="flex justify-between text-slate-400">
               <span>Timestamp:</span>
               <span className="text-slate-200">{incident.timestamp.substring(0, 16).replace('T', ' ')} UTC</span>
@@ -141,6 +153,11 @@ export const IncidentDetailsPage: React.FC = () => {
             <span className="text-sm font-bold text-slate-200 mt-1 block truncate">
               {metrics.service}
             </span>
+            {incident.environmentId && (
+              <span className="text-[10px] text-cyan-400 mt-0.5 block truncate">
+                Env: {incident.environmentId}
+              </span>
+            )}
           </div>
 
           <div className="bg-slate-950/70 border border-slate-800/90 rounded p-3">

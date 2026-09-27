@@ -13,6 +13,7 @@ import {
   Radio,
   Clock,
   Activity,
+  Server,
 } from 'lucide-react';
 import { getGitHubStatus } from '@/api/github';
 
@@ -47,6 +48,7 @@ export const AppLayout: React.FC = () => {
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
     { to: '/investigation', label: 'Investigation', icon: SearchCode },
+    { to: '/topology', label: 'Applications', icon: Server },
     { to: '/ml-analytics', label: 'ML Analytics', icon: BrainCircuit },
     { to: '/fuzzy-risk', label: 'Fuzzy Risk', icon: Sliders },
     { to: '/reports', label: 'Reports', icon: FileText },

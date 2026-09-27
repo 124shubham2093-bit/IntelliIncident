@@ -23,6 +23,12 @@ class Incident(BaseModel):
     timestamp: str
     summary: str
     affectedUsersCount: int
+    project_id: Optional[str] = None
+    application_id: Optional[str] = None
+    environment_id: Optional[str] = None
+    projectId: Optional[str] = None
+    applicationId: Optional[str] = None
+    environmentId: Optional[str] = None
 
 class IncidentMetrics(BaseModel):
     service: str
@@ -94,6 +100,12 @@ class IncidentCreatePayload(BaseModel):
     status: IncidentStatus = "OPEN"
     timestamp: Optional[str] = None
     affected_users_count: Optional[int] = None
+    project_id: Optional[str] = None
+    application_id: Optional[str] = None
+    environment_id: Optional[str] = None
+    projectId: Optional[str] = None
+    applicationId: Optional[str] = None
+    environmentId: Optional[str] = None
     metrics: Optional[TelemetryInput] = None
     logs: Optional[List[RuntimeLogInput]] = None
     deployments: Optional[List[DeploymentInput]] = None

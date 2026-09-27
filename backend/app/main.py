@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.core.config import settings
 from backend.app.db.database import init_db
-from backend.app.api.routes import health, incidents, analysis, analytics, fuzzy, root_cause, reports, github
+from backend.app.api.routes import health, incidents, analysis, analytics, fuzzy, root_cause, reports, github, projects
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,6 +47,7 @@ app.include_router(fuzzy.router, prefix="/api")
 app.include_router(root_cause.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(github.router, prefix="/api")
+app.include_router(projects.router, prefix="/api")
 
 
 @app.get("/")
