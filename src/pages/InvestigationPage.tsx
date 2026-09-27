@@ -143,13 +143,29 @@ export const InvestigationPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div className="bg-slate-950/80 border border-slate-800 rounded p-3 flex items-start gap-2.5">
                 <GitCommit className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                <div>
+                <div className="min-w-0 flex-1">
                   <span className="text-xs font-mono font-semibold text-slate-200 block">
                     Deployment Events
                   </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    CI/CD commits, image hashes, config drift
-                  </p>
+                  {incidentDetail.githubCommits && incidentDetail.githubCommits.length > 0 ? (
+                    <div className="mt-1 space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                        <span className="text-cyan-400 font-semibold">
+                          {incidentDetail.githubCommits[0].short_sha || incidentDetail.githubCommits[0].sha.slice(0, 7)}
+                        </span>
+                        <span className="text-slate-400 truncate">
+                          by {incidentDetail.githubCommits[0].author.name}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 truncate" title={incidentDetail.githubCommits[0].message}>
+                        {incidentDetail.githubCommits[0].message.split('\n')[0]}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      CI/CD commits, image hashes, config drift
+                    </p>
+                  )}
                 </div>
               </div>
 

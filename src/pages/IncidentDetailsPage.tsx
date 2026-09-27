@@ -7,6 +7,7 @@ import {
   BrainCircuit,
   Sliders,
   FileText,
+  GitCommit,
 } from 'lucide-react';
 import { SeverityBadge } from '@/components/Common/SeverityBadge';
 import { RiskBadge } from '@/components/Common/RiskBadge';
@@ -14,6 +15,7 @@ import { StatusBadge } from '@/components/Common/StatusBadge';
 import { EvidenceTimeline } from '@/components/Incident/EvidenceTimeline';
 import { RootCauseList } from '@/components/Incident/RootCauseList';
 import { RecommendationsList } from '@/components/Incident/RecommendationsList';
+import { GitHubCommitCard } from '@/components/Incident/GitHubCommitCard';
 import { getIncidentById } from '@/api/incidents';
 import { IncidentDetails } from '@/types';
 
@@ -188,13 +190,52 @@ export const IncidentDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* SECTION 2: ML Analysis */}
+      {/* SECTION 2: Code Intelligence & Deployment Evidence (GitHub) */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <GitCommit className="w-4 h-4 text-teal-400" />
+            <h3 className="text-sm font-semibold text-slate-100 font-mono uppercase tracking-wider">
+              Section 2: Code Intelligence & Deployment Evidence (GitHub)
+            </h3>
+          </div>
+          <span className="text-xs font-mono text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/30">
+            Source Control Intelligence
+          </span>
+        </div>
+
+        {incident.githubCommits && incident.githubCommits.length > 0 ? (
+          <div className="space-y-4">
+            {incident.githubCommits.map((commit) => (
+              <GitHubCommitCard
+                key={commit.sha}
+                commit={commit}
+                rootCauseCandidates={incident.rootCauseCandidates}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-6 text-center space-y-2">
+            <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
+              <GitCommit className="w-4 h-4" />
+            </div>
+            <p className="text-xs font-mono text-slate-400">
+              No deployment commit hash is associated with this incident.
+            </p>
+            <p className="text-[11px] font-sans text-slate-500 max-w-md mx-auto">
+              When deployments cite a valid Git commit SHA, IntelliIncident retrieves commit metadata, modified files, and diff statistics to correlate code changes with runtime evidence.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* SECTION 3: ML Analysis */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800 mb-4">
           <div className="flex items-center gap-2">
             <BrainCircuit className="w-4 h-4 text-purple-400" />
             <h3 className="text-sm font-semibold text-slate-100 font-mono uppercase tracking-wider">
-              Section 2: Machine Learning Inference Analysis
+              Section 3: Machine Learning Inference Analysis
             </h3>
           </div>
           <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/30">
@@ -307,13 +348,13 @@ export const IncidentDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* SECTION 3: Fuzzy Risk Assessment */}
+      {/* SECTION 4: Fuzzy Risk Assessment */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800 mb-4">
           <div className="flex items-center gap-2">
             <Sliders className="w-4 h-4 text-amber-400" />
             <h3 className="text-sm font-semibold text-slate-100 font-mono uppercase tracking-wider">
-              Section 3: Soft Computing Fuzzy Risk Assessment
+              Section 4: Soft Computing Fuzzy Risk Assessment
             </h3>
           </div>
           <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
@@ -429,13 +470,13 @@ export const IncidentDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* SECTION 4: Evidence Timeline */}
+      {/* SECTION 5: Evidence Timeline */}
       <EvidenceTimeline events={incident.evidenceTimeline} />
 
-      {/* SECTION 5: Root Cause Analysis */}
+      {/* SECTION 6: Root Cause Analysis */}
       <RootCauseList candidates={incident.rootCauseCandidates} />
 
-      {/* SECTION 6: Recommendations */}
+      {/* SECTION 7: Recommendations */}
       <RecommendationsList recommendations={incident.recommendations} />
     </div>
   );

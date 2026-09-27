@@ -130,6 +130,89 @@ export interface IncidentDetails extends Incident {
   evidenceTimeline: EvidenceEvent[];
   rootCauseCandidates: RootCauseCandidate[];
   recommendations: Recommendation[];
+  githubCommits?: GitHubCommitDetail[];
+}
+
+// GitHub Code Intelligence Types
+export interface GitHubRateLimit {
+  limit: number;
+  remaining: number;
+  reset_at: number | null;
+  used: number;
+}
+
+export interface GitHubStatus {
+  configured: boolean;
+  authenticated: boolean;
+  reachable: boolean;
+  owner: string;
+  repo: string;
+  default_branch: string;
+  api_url: string;
+  rate_limit?: GitHubRateLimit | null;
+  message?: string | null;
+}
+
+export interface GitHubRepository {
+  full_name: string;
+  owner: string;
+  name: string;
+  description?: string | null;
+  default_branch: string;
+  is_private: boolean;
+  html_url: string;
+  stars_count: number;
+  forks_count: number;
+  open_issues_count: number;
+}
+
+export interface GitHubCommitAuthor {
+  name?: string | null;
+  email?: string | null;
+  date?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
+}
+
+export interface GitHubCommitSummary {
+  sha: string;
+  short_sha: string;
+  message: string;
+  author: GitHubCommitAuthor;
+  committed_at?: string | null;
+  html_url: string;
+}
+
+export interface GitHubChangedFile {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  blob_url?: string | null;
+  raw_url?: string | null;
+  patch?: string | null;
+}
+
+export interface GitHubCommitDetail extends GitHubCommitSummary {
+  stats: {
+    total: number;
+    additions: number;
+    deletions: number;
+  };
+  files: GitHubChangedFile[];
+}
+
+export interface GitHubFileContent {
+  path: string;
+  name: string;
+  size: number;
+  sha: string;
+  html_url?: string | null;
+  encoding?: string | null;
+  content?: string | null;
+  decoded_content?: string | null;
+  is_binary: boolean;
 }
 
 export interface ServiceHealth {
