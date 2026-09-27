@@ -21,6 +21,8 @@ from backend.app.schemas.project import (
     ConnectionGuideResponse,
     IngestionTestResponse,
 )
+from backend.app.schemas.github import GitHubApplicationVerification
+from backend.app.services.github_service import GitHubService
 from backend.app.services.project_service import ProjectService
 
 router = APIRouter(tags=["Topology"])
@@ -132,6 +134,29 @@ async def delete_application(application_id: str):
         return {"status": "ok", "message": f"Application '{application_id}' successfully deleted."}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.get("/applications/{application_id}/github-status", response_model=GitHubApplicationVerification)
+async def verify_application_github(application_id: str):
+    """
+    Verify application-scoped GitHub repository and branch accessibility.
+    Does not crash; returns factual reachability and accessibility information.
+    """
+    app = project_service.get_application_by_id(application_id)
+    if not app:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Application '{application_id}' not found.")
+
+    repo_owner = app.get("repo_owner")
+    repo_name = app.get("repo_name")
+    default_branch = app.get("default_branch") or "main"
+
+    gh_service = GitHubService(
+        owner=repo_owner,
+        repo=repo_name,
+        default_branch=default_branch,
+    )
+    return await gh_service.verify_connection(branch=default_branch)
+
 
 
 # ==========================================

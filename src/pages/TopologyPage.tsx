@@ -24,6 +24,7 @@ import {
   Environment,
   ConnectionGuide,
   IngestionTestResult,
+  GitHubApplicationVerification,
 } from '@/types';
 import {
   getProjects,
@@ -38,6 +39,8 @@ import {
   regenerateEnvironmentKey,
   getConnectionGuide,
   testEnvironmentIngestion,
+  verifyApplicationGitHub,
+  updateEnvironmentCommit,
 } from '@/api/projects';
 
 export const TopologyPage: React.FC = () => {
@@ -58,6 +61,8 @@ export const TopologyPage: React.FC = () => {
   const [testingEnvId, setTestingEnvId] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [ghVerificationMap, setGhVerificationMap] = useState<Record<string, GitHubApplicationVerification>>({});
+  const [verifyingAppId, setVerifyingAppId] = useState<string | null>(null);
 
   // Form states
   const [newProjectName, setNewProjectName] = useState('');
@@ -93,6 +98,15 @@ export const TopologyPage: React.FC = () => {
         for (const a of appsRes.data) {
           const envsRes = await getEnvironments(a.id);
           envsMap[a.id] = envsRes.data;
+
+          // Trigger background GitHub verification for applications with repository bindings
+          if (a.repo_owner && a.repo_name) {
+            verifyApplicationGitHub(a.id)
+              .then((vRes) => {
+                setGhVerificationMap((prev) => ({ ...prev, [a.id]: vRes }));
+              })
+              .catch(() => {});
+          }
         }
       }
 
@@ -259,6 +273,29 @@ export const TopologyPage: React.FC = () => {
     }
   };
 
+  const handleVerifyGitHub = async (appId: string) => {
+    setVerifyingAppId(appId);
+    try {
+      const res = await verifyApplicationGitHub(appId);
+      setGhVerificationMap((prev) => ({ ...prev, [appId]: res }));
+    } catch (err: any) {
+      alert(`GitHub verification failed: ${err.message}`);
+    } finally {
+      setVerifyingAppId(null);
+    }
+  };
+
+  const handleUpdateCommit = async (envId: string, currentVal: string) => {
+    const input = prompt('Enter deployed Git commit SHA for this environment:', currentVal);
+    if (input === null) return;
+    try {
+      await updateEnvironmentCommit(envId, input.trim());
+      await loadData();
+    } catch (err: any) {
+      alert(`Failed to update deployment commit: ${err.message}`);
+    }
+  };
+
   const copyToClipboard = (text: string, isSnippet = false) => {
     navigator.clipboard.writeText(text);
     if (isSnippet) {
@@ -421,17 +458,54 @@ export const TopologyPage: React.FC = () => {
                                 )}
                               </div>
 
-                              {/* GitHub Binding Info */}
-                              <div className="flex items-center gap-3">
+                              {/* GitHub Binding Info & Connection Verification */}
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                                 {app.repo_owner && app.repo_name ? (
-                                  <div className="flex items-center gap-1.5 text-xs font-mono text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/30">
-                                    <GitBranch className="w-3.5 h-3.5" />
-                                    <span>
-                                      {app.repo_owner}/{app.repo_name}
-                                    </span>
-                                    <span className="text-[10px] text-teal-300/70">
-                                      ({app.default_branch})
-                                    </span>
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-1.5 text-xs font-mono text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/30">
+                                        <GitBranch className="w-3.5 h-3.5" />
+                                        <span>
+                                          {app.repo_owner}/{app.repo_name}
+                                        </span>
+                                        <span className="text-[10px] text-teal-300/70">
+                                          ({app.default_branch})
+                                        </span>
+                                      </div>
+
+                                      <button
+                                        onClick={() => handleVerifyGitHub(app.id)}
+                                        disabled={verifyingAppId === app.id}
+                                        className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1 transition-colors"
+                                        title="Verify repository and branch accessibility"
+                                      >
+                                        <CheckCircle2 className={`w-3 h-3 ${verifyingAppId === app.id ? 'animate-spin text-teal-400' : 'text-slate-400'}`} />
+                                        <span>{verifyingAppId === app.id ? 'Checking...' : 'Verify'}</span>
+                                      </button>
+                                    </div>
+
+                                    {/* Factual GitHub Connection Status Badge */}
+                                    {ghVerificationMap[app.id] && (
+                                      <div className={`p-2 rounded text-[10px] font-mono border ${
+                                        ghVerificationMap[app.id].connected
+                                          ? 'bg-emerald-950/30 border-emerald-800/60 text-emerald-300'
+                                          : 'bg-rose-950/30 border-rose-800/60 text-rose-300'
+                                      }`}>
+                                        <div className="flex items-center gap-2 font-semibold">
+                                          <span>GitHub:</span>
+                                          <span>{ghVerificationMap[app.id].connected ? '✓ Connected' : '✗ Verification Failed'}</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-x-3 text-[9px] text-slate-400 mt-0.5">
+                                          <div>Repo: <span className={ghVerificationMap[app.id].repository_accessible ? 'text-emerald-400 font-semibold' : 'text-rose-400'}>{ghVerificationMap[app.id].repository_accessible ? 'Accessible' : 'Not Found'}</span></div>
+                                          <div>Branch: <span className={ghVerificationMap[app.id].branch_accessible ? 'text-emerald-400 font-semibold' : 'text-rose-400'}>{ghVerificationMap[app.id].branch_accessible ? 'Accessible' : 'Not Found'}</span></div>
+                                        </div>
+                                        {ghVerificationMap[app.id].message && (
+                                          <div className="text-[9px] mt-0.5 text-slate-400 italic">
+                                            {ghVerificationMap[app.id].message}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 ) : (
                                   <span className="text-[11px] font-mono text-slate-500 italic">
@@ -439,20 +513,22 @@ export const TopologyPage: React.FC = () => {
                                   </span>
                                 )}
 
-                                <button
-                                  onClick={() => setShowEnvModalForApp(app.id)}
-                                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] font-mono text-slate-300 transition-colors"
-                                >
-                                  <Plus className="w-3 h-3 text-teal-400" />
-                                  <span>Add Environment</span>
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteApp(app.id, app.name)}
-                                  className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
-                                  title="Delete Application"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex items-center gap-2 ml-auto">
+                                  <button
+                                    onClick={() => setShowEnvModalForApp(app.id)}
+                                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[11px] font-mono text-slate-300 transition-colors"
+                                  >
+                                    <Plus className="w-3 h-3 text-teal-400" />
+                                    <span>Add Environment</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteApp(app.id, app.name)}
+                                    className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+                                    title="Delete Application"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
 
@@ -511,19 +587,40 @@ export const TopologyPage: React.FC = () => {
                                       </div>
 
                                       {/* Endpoint / Commit Metadata */}
-                                      <div className="text-[10px] text-slate-400 space-y-0.5">
+                                      <div className="text-[10px] text-slate-400 space-y-1">
                                         {env.endpoint_url && (
                                           <div className="truncate flex items-center gap-1">
                                             <Globe className="w-3 h-3 shrink-0" />
                                             <span className="truncate">{env.endpoint_url}</span>
                                           </div>
                                         )}
-                                        {env.current_commit && (
-                                          <div className="flex items-center gap-1">
+                                        <div className="flex items-center justify-between gap-1 p-1.5 bg-slate-950/80 rounded border border-slate-800">
+                                          <div className="flex items-center gap-1.5 truncate">
                                             <GitCommit className="w-3 h-3 shrink-0 text-cyan-400" />
-                                            <span className="text-cyan-400 font-semibold">{env.current_commit.slice(0, 7)}</span>
+                                            <span className="text-slate-400">Deployed commit:</span>
+                                            <span className="text-cyan-400 font-semibold" title={env.current_commit || 'None'}>
+                                              {env.current_commit ? env.current_commit.slice(0, 7) : 'Not set'}
+                                            </span>
                                           </div>
-                                        )}
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            {env.current_commit && (
+                                              <button
+                                                onClick={() => copyToClipboard(env.current_commit || '')}
+                                                className="text-[9px] text-slate-500 hover:text-slate-300"
+                                                title="Copy full commit SHA"
+                                              >
+                                                Copy
+                                              </button>
+                                            )}
+                                            <button
+                                              onClick={() => handleUpdateCommit(env.id, env.current_commit || '')}
+                                              className="text-[9px] text-cyan-400 hover:text-cyan-300"
+                                              title="Update deployed commit"
+                                            >
+                                              Edit
+                                            </button>
+                                          </div>
+                                        </div>
                                       </div>
 
                                       {/* Action Buttons */}

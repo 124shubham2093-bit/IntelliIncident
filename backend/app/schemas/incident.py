@@ -4,7 +4,8 @@ from pydantic import BaseModel
 from backend.app.schemas.analytics import AnomalyResult, SeverityPrediction
 from backend.app.schemas.fuzzy import FuzzyRiskResult
 from backend.app.schemas.root_cause import EvidenceEvent, RootCauseCandidate, Recommendation
-from backend.app.schemas.github import GitHubCommitDetail
+from backend.app.schemas.github import GitHubCommitDetail, GitHubSourceEvidence
+
 
 IncidentSeverity = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 IncidentStatus = Literal["OPEN", "INVESTIGATING", "MITIGATED", "RESOLVED"]
@@ -53,6 +54,12 @@ class IncidentDetails(Incident):
     rootCauseCandidates: List[RootCauseCandidate]
     recommendations: List[Recommendation]
     githubCommits: Optional[List[GitHubCommitDetail]] = None
+    githubSourceEvidence: Optional[GitHubSourceEvidence] = None
+    github_source_evidence: Optional[GitHubSourceEvidence] = None
+    deployedCommit: Optional[str] = None
+    deployed_commit: Optional[str] = None
+    environmentName: Optional[str] = None
+    environment_name: Optional[str] = None
 
 class TelemetryInput(BaseModel):
     error_rate: float
@@ -111,4 +118,10 @@ class IncidentCreatePayload(BaseModel):
     deployments: Optional[List[DeploymentInput]] = None
     tickets: Optional[List[SupportTicketInput]] = None
     events: Optional[List[EvidenceEventInput]] = None
-
+    # Real runtime error telemetry ingestion fields
+    error_type: Optional[str] = None
+    error_message: Optional[str] = None
+    stack_trace: Optional[str] = None
+    commit_sha: Optional[str] = None
+    commitSha: Optional[str] = None
+    environment: Optional[str] = None

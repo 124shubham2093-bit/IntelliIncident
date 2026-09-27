@@ -124,6 +124,35 @@ export const InvestigationPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Automated Fuzzy Risk Assessment */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-mono">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs font-semibold text-slate-100 uppercase tracking-wider">
+                  Fuzzy Risk Assessment
+                </span>
+                <span className="text-slate-600">&bull;</span>
+                <span className="text-xs text-slate-300">
+                  Risk Score:{' '}
+                  <span className="text-rose-400 font-bold">
+                    {incidentDetail.riskScore}
+                  </span>
+                </span>
+                <span className="text-slate-600">&bull;</span>
+                <span className="text-xs text-slate-300 flex items-center gap-1.5">
+                  Risk Level:
+                  <RiskBadge risk={incidentDetail.risk} />
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-sans leading-relaxed">
+                Calculated automatically from incident telemetry using the Mamdani fuzzy inference engine.
+              </p>
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono shrink-0 bg-slate-950/80 px-2.5 py-1 rounded border border-slate-800">
+              Mamdani FIS &bull; Centroid Defuzzification &bull; Read-Only
+            </div>
+          </div>
+
           {/* VISUAL CAUSAL PIPELINE:
               Operational Signals -> Evidence Correlation -> Root Cause Candidates */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 space-y-4">

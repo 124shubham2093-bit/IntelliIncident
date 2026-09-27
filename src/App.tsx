@@ -6,7 +6,6 @@ import { IncidentsPage } from '@/pages/IncidentsPage';
 import { IncidentDetailsPage } from '@/pages/IncidentDetailsPage';
 import { InvestigationPage } from '@/pages/InvestigationPage';
 import { MLAnalyticsPage } from '@/pages/MLAnalyticsPage';
-import { FuzzyRiskPage } from '@/pages/FuzzyRiskPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { TopologyPage } from '@/pages/TopologyPage';
 
@@ -22,7 +21,7 @@ export const App: React.FC = () => {
           <Route path="/investigation" element={<InvestigationPage />} />
           <Route path="/topology" element={<TopologyPage />} />
           <Route path="/ml-analytics" element={<MLAnalyticsPage />} />
-          <Route path="/fuzzy-risk" element={<FuzzyRiskPage />} />
+          <Route path="/fuzzy-risk" element={<Navigate to="/investigation" replace />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>

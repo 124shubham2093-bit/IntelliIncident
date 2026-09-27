@@ -11,6 +11,7 @@ import {
   EnvironmentApiKeyRegenerateResponse,
   ConnectionGuide,
   IngestionTestResult,
+  GitHubApplicationVerification,
 } from '@/types';
 
 // ==========================================
@@ -157,5 +158,23 @@ export async function getConnectionGuide(environmentId: string): Promise<{ data:
 export async function testEnvironmentIngestion(environmentId: string): Promise<IngestionTestResult> {
   return await apiClient<IngestionTestResult>(`/api/environments/${environmentId}/test-ingestion`, {
     method: 'POST',
+  });
+}
+
+export async function verifyApplicationGitHub(
+  applicationId: string
+): Promise<GitHubApplicationVerification> {
+  return await apiClient<GitHubApplicationVerification>(
+    `/api/applications/${applicationId}/github-status`
+  );
+}
+
+export async function updateEnvironmentCommit(
+  environmentId: string,
+  currentCommit: string
+): Promise<Environment> {
+  return await apiClient<Environment>(`/api/environments/${environmentId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ current_commit: currentCommit }),
   });
 }

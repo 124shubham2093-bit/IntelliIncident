@@ -134,6 +134,9 @@ export interface IncidentDetails extends Incident {
   rootCauseCandidates: RootCauseCandidate[];
   recommendations: Recommendation[];
   githubCommits?: GitHubCommitDetail[];
+  githubSourceEvidence?: GitHubSourceEvidence | null;
+  deployedCommit?: string | null;
+  environmentName?: string | null;
 }
 
 // GitHub Code Intelligence Types
@@ -217,6 +220,45 @@ export interface GitHubFileContent {
   decoded_content?: string | null;
   is_binary: boolean;
 }
+
+export interface GitHubApplicationVerification {
+  connected: boolean;
+  repository_accessible: boolean;
+  branch_accessible: boolean;
+  owner: string;
+  repo: string;
+  branch: string;
+  default_branch?: string | null;
+  message?: string | null;
+  rate_limit?: GitHubRateLimit | null;
+}
+
+export interface GitHubSourceLocation {
+  file_path: string;
+  line_number: number;
+  column_number?: number | null;
+  function_name?: string | null;
+}
+
+export interface GitHubSourceLine {
+  line_number: number;
+  content: string;
+  is_target: boolean;
+}
+
+export interface GitHubSourceEvidence {
+  status: string; // "MATCHED", "UNRESOLVED", "FILE_NOT_FOUND", "GITHUB_UNAVAILABLE", "NO_STACK_TRACE", "NO_COMMIT"
+  deployment_commit?: string | null;
+  location?: GitHubSourceLocation | null;
+  repo_owner?: string | null;
+  repo_name?: string | null;
+  file_path?: string | null;
+  target_line?: number | null;
+  source_lines?: GitHubSourceLine[] | null;
+  raw_code?: string | null;
+  message: string;
+}
+
 
 export interface ServiceHealth {
   service: string;

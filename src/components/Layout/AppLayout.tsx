@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   SearchCode,
   BrainCircuit,
-  Sliders,
   FileText,
   ShieldCheck,
   Menu,
@@ -50,7 +49,6 @@ export const AppLayout: React.FC = () => {
     { to: '/investigation', label: 'Investigation', icon: SearchCode },
     { to: '/topology', label: 'Applications', icon: Server },
     { to: '/ml-analytics', label: 'ML Analytics', icon: BrainCircuit },
-    { to: '/fuzzy-risk', label: 'Fuzzy Risk', icon: Sliders },
     { to: '/reports', label: 'Reports', icon: FileText },
   ];
 

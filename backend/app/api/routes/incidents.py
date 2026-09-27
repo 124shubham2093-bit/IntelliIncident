@@ -46,6 +46,10 @@ async def create_incident(
             payload.environmentId = env_record["id"]
             payload.applicationId = env_record["application_id"]
             payload.projectId = env_record["project_id"]
+            if not payload.environment:
+                payload.environment = env_record.get("name") or "production"
+            if not payload.commit_sha and not payload.commitSha and env_record.get("current_commit"):
+                payload.commit_sha = env_record["current_commit"]
 
         created = await incident_service.create_incident(payload)
         return created
