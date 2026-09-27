@@ -1,0 +1,146 @@
+{
+  "metrics": {
+    "accuracy": 0.9176,
+    "precision": 0.9081,
+    "recall": 0.8908,
+    "f1Score": 0.8983,
+    "trainingSamplesCount": 680,
+    "lastTrainedDate": "2026-09-26T13:15:23.604247+00:00"
+  },
+  "featureImportance": [
+    {
+      "feature": "Error Rate Spike (%)",
+      "importance": 0.2719,
+      "category": "Error Telemetry"
+    },
+    {
+      "feature": "Active User Impact Volume",
+      "importance": 0.1532,
+      "category": "Business SLA"
+    },
+    {
+      "feature": "Peak Resource Saturation",
+      "importance": 0.13,
+      "category": "Infrastructure"
+    },
+    {
+      "feature": "Memory Saturation (%)",
+      "importance": 0.1205,
+      "category": "Infrastructure"
+    },
+    {
+      "feature": "Error Volume Rate",
+      "importance": 0.0824,
+      "category": "Error Telemetry"
+    },
+    {
+      "feature": "CPU Saturation (%)",
+      "importance": 0.0711,
+      "category": "Infrastructure"
+    },
+    {
+      "feature": "P50 Latency (ms)",
+      "importance": 0.0634,
+      "category": "Latency"
+    },
+    {
+      "feature": "P99 Latency (ms)",
+      "importance": 0.0459,
+      "category": "Latency"
+    },
+    {
+      "feature": "P99/P50 Latency Ratio",
+      "importance": 0.0226,
+      "category": "Latency Tail"
+    },
+    {
+      "feature": "Request Volume (req/s)",
+      "importance": 0.0181,
+      "category": "Traffic Load"
+    },
+    {
+      "feature": "Deployment Recency (mins)",
+      "importance": 0.0159,
+      "category": "Change Events"
+    },
+    {
+      "feature": "Service Criticality Tier",
+      "importance": 0.005,
+      "category": "Topology"
+    }
+  ],
+  "confusionMatrix": [
+    {
+      "actual": "LOW",
+      "low": 61,
+      "medium": 3,
+      "high": 0,
+      "critical": 0
+    },
+    {
+      "actual": "MEDIUM",
+      "low": 2,
+      "medium": 54,
+      "high": 0,
+      "critical": 0
+    },
+    {
+      "actual": "HIGH",
+      "low": 0,
+      "medium": 4,
+      "high": 26,
+      "critical": 2
+    },
+    {
+      "actual": "CRITICAL",
+      "low": 0,
+      "medium": 0,
+      "high": 3,
+      "critical": 15
+    }
+  ],
+  "anomalyDistribution": [
+    {
+      "bin": "-0.8 to -0.6",
+      "normalCount": 0,
+      "anomalyCount": 0,
+      "scoreRange": "Severe Anomaly"
+    },
+    {
+      "bin": "-0.6 to -0.4",
+      "normalCount": 0,
+      "anomalyCount": 0,
+      "scoreRange": "High Anomaly"
+    },
+    {
+      "bin": "-0.4 to -0.2",
+      "normalCount": 0,
+      "anomalyCount": 0,
+      "scoreRange": "Borderline"
+    },
+    {
+      "bin": "-0.2 to 0.0",
+      "normalCount": 0,
+      "anomalyCount": 30,
+      "scoreRange": "Mild Inlier"
+    },
+    {
+      "bin": "0.0 to 0.2",
+      "normalCount": 140,
+      "anomalyCount": 0,
+      "scoreRange": "Normal"
+    },
+    {
+      "bin": "0.2 to 0.4",
+      "normalCount": 0,
+      "anomalyCount": 0,
+      "scoreRange": "Normal"
+    },
+    {
+      "bin": "0.4 to 0.6",
+      "normalCount": 0,
+      "anomalyCount": 0,
+      "scoreRange": "Nominal Baseline"
+    }
+  ]
+}
