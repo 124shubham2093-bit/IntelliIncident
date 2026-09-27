@@ -208,6 +208,9 @@ export const FuzzyRiskPage: React.FC = () => {
                 </span>
                 <SeverityBadge severity={incidentDetail.severity} size="sm" />
                 <StatusBadge status={incidentDetail.status} />
+                <span className="text-[10px] font-mono font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                  Fuzzy Risk: Read-Only
+                </span>
               </div>
               <h2 className="text-sm sm:text-base font-semibold text-slate-100 font-sans">
                 {incidentDetail.title}
@@ -300,9 +303,15 @@ export const FuzzyRiskPage: React.FC = () => {
                 <h3 className="text-xs font-semibold text-slate-100 font-mono uppercase tracking-wider">
                   Defuzzification Result (Main Output)
                 </h3>
-                <span className="text-[10px] font-mono text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/30">
-                  COA Defuzzified
-                </span>
+                {incidentDetail && !showSimulation ? (
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 font-semibold">
+                    AUTHORITATIVE (READ-ONLY)
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30 font-semibold">
+                    SIMULATION SANDBOX
+                  </span>
+                )}
               </div>
 
               <div className="flex items-baseline justify-between">
@@ -352,6 +361,12 @@ export const FuzzyRiskPage: React.FC = () => {
                   </span>
                   <span className="text-[10px] bg-amber-500/20 px-1.5 py-0.5 rounded">Active</span>
                 </div>
+
+                {incidentDetail && (
+                  <p className="text-[10px] text-amber-400/80 font-mono leading-relaxed bg-amber-500/10 p-2 rounded border border-amber-500/20">
+                    Simulation sandbox only: evaluations run in memory and do not overwrite the authoritative stored incident risk.
+                  </p>
+                )}
 
                 <div>
                   <div className="flex justify-between text-[11px] text-slate-400 mb-1">

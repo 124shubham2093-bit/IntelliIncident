@@ -9,7 +9,7 @@ analysis_service = AnalysisService()
 @router.post("/analyze/{incident_id}", response_model=IncidentAnalysis)
 async def analyze_incident(incident_id: str):
     try:
-        analysis = analysis_service.analyze_incident(incident_id)
+        analysis = await analysis_service.analyze_incident(incident_id)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     if not analysis:

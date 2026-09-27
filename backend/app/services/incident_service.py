@@ -6,6 +6,7 @@ Handles incident queries, filtering, and detailed record assembly from SQLite.
 import datetime
 import uuid
 import random
+import re
 from typing import Dict, Any, List, Optional
 from backend.app.db.database import get_db_connection
 from backend.app.ml.anomaly_detector import AnomalyDetector
@@ -13,7 +14,11 @@ from backend.app.ml.severity_classifier import SeverityClassifier
 from backend.app.fuzzy.fuzzy_engine import FuzzyRiskEngine
 from backend.app.rca.root_cause_engine import RootCauseEngine
 from backend.app.services.recommendation_service import RecommendationService
+from backend.app.services.github_service import GitHubService
 from backend.app.schemas.incident import IncidentCreatePayload
+
+HEX_COMMIT_REGEX = re.compile(r"^[0-9a-fA-F]{7,40}$")
+INVALID_REF_NAMES = {"main", "master", "head", "latest", "default"}
 
 class IncidentService:
     def __init__(self):
@@ -21,6 +26,40 @@ class IncidentService:
         self.severity_classifier = SeverityClassifier()
         self.fuzzy_engine = FuzzyRiskEngine()
         self.root_cause_engine = RootCauseEngine()
+        self.github_service = GitHubService()
+
+    @staticmethod
+    def _is_valid_commit_hash(sha: Optional[str]) -> bool:
+        if not sha or not isinstance(sha, str):
+            return False
+        sha_clean = sha.strip()
+        if sha_clean.lower() in INVALID_REF_NAMES:
+            return False
+        return bool(HEX_COMMIT_REGEX.match(sha_clean))
+
+    async def _fetch_deployment_commits(self, deployments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        commits = []
+        seen_shas = set()
+        for dep in deployments:
+            sha = dep.get("commit_hash")
+            if not self._is_valid_commit_hash(sha):
+                continue
+            sha_clean = sha.strip()
+            if sha_clean in seen_shas:
+                continue
+            seen_shas.add(sha_clean)
+            try:
+                commit_detail = await self.github_service.get_commit(sha_clean)
+                if commit_detail:
+                    c_dict = (
+                        commit_detail.model_dump()
+                        if hasattr(commit_detail, "model_dump")
+                        else (commit_detail if isinstance(commit_detail, dict) else {})
+                    )
+                    commits.append(c_dict)
+            except Exception:
+                continue
+        return commits
 
     def get_incidents(
         self,
@@ -83,7 +122,7 @@ class IncidentService:
             })
         return result
 
-    def get_incident_details(self, incident_id: str) -> Optional[Dict[str, Any]]:
+    async def get_incident_details(self, incident_id: str) -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -181,14 +220,16 @@ class IncidentService:
                 "severity": ev["severity"],
             })
 
-        # Root Cause Analysis
+        # Root Cause Analysis with GitHub Commit Evidence
         incident_dict = dict(inc_row)
+        github_commits = await self._fetch_deployment_commits(deps_list)
         root_causes = self.root_cause_engine.analyze(
             incident=incident_dict,
             metrics=metrics,
             logs=logs_list,
             deployments=deps_list,
             tickets=tickets_list,
+            github_commits=github_commits,
         )
 
         # Recommendations based on top candidate
@@ -197,6 +238,7 @@ class IncidentService:
             top_candidate=top_cand,
             service_name=inc_row["service"],
             severity=inc_row["severity"],
+            github_commits=github_commits,
         )
 
         return {
@@ -221,9 +263,10 @@ class IncidentService:
             "evidenceTimeline": evidence_timeline,
             "rootCauseCandidates": root_causes,
             "recommendations": recommendations,
+            "githubCommits": github_commits,
         }
 
-    def create_incident(self, payload: IncidentCreatePayload) -> Dict[str, Any]:
+    async def create_incident(self, payload: IncidentCreatePayload) -> Dict[str, Any]:
         """
         Ingest a real or developer-supplied incident, execute the full intelligence
         pipeline (Feature Engineering -> Isolation Forest -> Random Forest -> Fuzzy Risk -> RCA),
@@ -358,12 +401,14 @@ class IncidentService:
             "title": payload.title,
             "severity": predicted_severity,
         }
+        github_commits = await self._fetch_deployment_commits(deps_list)
         root_causes = self.root_cause_engine.analyze(
             incident=temp_inc,
             metrics=metrics_dict,
             logs=logs_list,
             deployments=deps_list,
             tickets=tickets_list,
+            github_commits=github_commits,
         )
         top_category = root_causes[0]["category"] if root_causes else "CODE_ERROR"
 
@@ -447,5 +492,5 @@ class IncidentService:
         conn.commit()
         conn.close()
 
-        return self.get_incident_details(incident_id)
+        return await self.get_incident_details(incident_id)
 

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from backend.app.schemas.analytics import AnomalyResult, SeverityPrediction
 from backend.app.schemas.fuzzy import FuzzyRiskResult
 from backend.app.schemas.root_cause import EvidenceEvent, RootCauseCandidate, Recommendation
+from backend.app.schemas.github import GitHubCommitDetail
 
 IncidentSeverity = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 IncidentStatus = Literal["OPEN", "INVESTIGATING", "MITIGATED", "RESOLVED"]
@@ -45,6 +46,7 @@ class IncidentDetails(Incident):
     evidenceTimeline: List[EvidenceEvent]
     rootCauseCandidates: List[RootCauseCandidate]
     recommendations: List[Recommendation]
+    githubCommits: Optional[List[GitHubCommitDetail]] = None
 
 class TelemetryInput(BaseModel):
     error_rate: float

@@ -4,12 +4,19 @@ Analyzes runtime logs, deployments, telemetry anomalies, and support tickets
 to construct empirical evidence matrices for candidate hypotheses.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import datetime
 
 class EvidenceCorrelator:
     @staticmethod
-    def correlate(incident: Dict[str, Any], metrics: Dict[str, Any], logs: List[Dict[str, Any]], deployments: List[Dict[str, Any]], tickets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def correlate(
+        incident: Dict[str, Any],
+        metrics: Dict[str, Any],
+        logs: List[Dict[str, Any]],
+        deployments: List[Dict[str, Any]],
+        tickets: List[Dict[str, Any]],
+        github_commits: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         """
         Evaluate factual evidence signals across 6 operational categories.
         """
@@ -38,6 +45,40 @@ class EvidenceCorrelator:
             elif dep.get("status") == "ROLLED_BACK":
                 dep_evidence.append(f"Rollback event detected on {dep.get('service')} ({dep.get('commit_hash')}).")
                 dep_score += 0.15
+
+        # GitHub Commit Evidence for DEPLOYMENT
+        if github_commits:
+            for commit in github_commits:
+                c_data = commit.model_dump() if hasattr(commit, "model_dump") else (commit if isinstance(commit, dict) else {})
+                sha = c_data.get("sha", "")
+                short_sha = c_data.get("short_sha") or (sha[:7] if sha else "unknown")
+                msg = c_data.get("message", "").strip().split("\n")[0]
+                author_info = c_data.get("author") or {}
+                author_name = author_info.get("name") or author_info.get("username") if isinstance(author_info, dict) else (getattr(author_info, "name", None) or "contributor")
+                stats = c_data.get("stats") or {}
+                adds = stats.get("additions", 0) if isinstance(stats, dict) else getattr(stats, "additions", 0)
+                dels = stats.get("deletions", 0) if isinstance(stats, dict) else getattr(stats, "deletions", 0)
+                raw_files = c_data.get("files") or []
+                file_count = len(raw_files)
+
+                if msg:
+                    dep_evidence.append(
+                        f"Deployment commit {short_sha} ('{msg}') authored by {author_name} modified {file_count} files (+{adds}/-{dels})."
+                    )
+                else:
+                    dep_evidence.append(
+                        f"Deployment commit {short_sha} authored by {author_name} modified {file_count} files (+{adds}/-{dels})."
+                    )
+
+                changed_names = []
+                for rf in raw_files:
+                    fn = rf.get("filename") if isinstance(rf, dict) else getattr(rf, "filename", None)
+                    if fn:
+                        changed_names.append(fn)
+                if changed_names:
+                    sample_names = ", ".join(changed_names[:3])
+                    dep_evidence.append(f"Commit {short_sha} changed files: {sample_names}.")
+
 
         # 2. DATABASE Evidence
         db_evidence = []
@@ -94,6 +135,34 @@ class EvidenceCorrelator:
                 code_evidence.append(f"Active stack trace detected: {log.get('message')}")
                 code_score += 0.30
                 break
+
+        # Correlate stack trace / error logs with files changed in deployment commits
+        if github_commits:
+            matched = False
+            for commit in github_commits:
+                c_data = commit.model_dump() if hasattr(commit, "model_dump") else (commit if isinstance(commit, dict) else {})
+                sha = c_data.get("sha", "")
+                short_sha = c_data.get("short_sha") or (sha[:7] if sha else "unknown")
+                raw_files = c_data.get("files") or []
+                for rf in raw_files:
+                    fn = rf.get("filename") if isinstance(rf, dict) else getattr(rf, "filename", None)
+                    if not fn:
+                        continue
+                    base_fn = fn.split("/")[-1]
+                    for log in logs:
+                        trace = log.get("stack_trace") or ""
+                        msg = log.get("message") or ""
+                        combined_text = f"{trace}\n{msg}"
+                        if fn in combined_text or (len(base_fn) >= 4 and base_fn in combined_text):
+                            code_evidence.append(
+                                f"Stack trace references '{fn}' modified in deployment commit {short_sha}."
+                            )
+                            matched = True
+                            break
+                    if matched:
+                        break
+                if matched:
+                    break
 
         # 5. TRAFFIC Evidence
         traffic_evidence = []

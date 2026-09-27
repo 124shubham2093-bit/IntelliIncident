@@ -4,7 +4,7 @@ Generates ranked hypotheses with confidence scores, factual evidence citations,
 and causal explanations.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from backend.app.rca.evidence_correlator import EvidenceCorrelator
 
 CATEGORY_DESCRIPTIONS = {
@@ -38,12 +38,27 @@ class RootCauseEngine:
     def __init__(self):
         self.correlator = EvidenceCorrelator()
 
-    def analyze(self, incident: Dict[str, Any], metrics: Dict[str, Any], logs: List[Dict[str, Any]] = None, deployments: List[Dict[str, Any]] = None, tickets: List[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def analyze(
+        self,
+        incident: Dict[str, Any],
+        metrics: Dict[str, Any],
+        logs: List[Dict[str, Any]] = None,
+        deployments: List[Dict[str, Any]] = None,
+        tickets: List[Dict[str, Any]] = None,
+        github_commits: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
         logs = logs or []
         deployments = deployments or []
         tickets = tickets or []
 
-        correlations = self.correlator.correlate(incident, metrics, logs, deployments, tickets)
+        correlations = self.correlator.correlate(
+            incident,
+            metrics,
+            logs,
+            deployments,
+            tickets,
+            github_commits=github_commits,
+        )
 
         candidates = []
         for cat_name, data in correlations.items():

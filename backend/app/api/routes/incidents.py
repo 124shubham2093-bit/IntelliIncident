@@ -26,7 +26,7 @@ async def list_incidents(
 @router.post("/incidents", response_model=IncidentDetails, status_code=status.HTTP_201_CREATED)
 async def create_incident(payload: IncidentCreatePayload):
     try:
-        created = incident_service.create_incident(payload)
+        created = await incident_service.create_incident(payload)
         return created
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to ingest incident: {str(e)}")
@@ -34,7 +34,7 @@ async def create_incident(payload: IncidentCreatePayload):
 @router.get("/incidents/{incident_id}", response_model=IncidentDetails)
 async def get_incident(incident_id: str):
     try:
-        incident = incident_service.get_incident_details(incident_id)
+        incident = await incident_service.get_incident_details(incident_id)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     if not incident:
