@@ -57,4 +57,3 @@ async def get_anomaly_distribution():
     if meta and "anomalyDistribution" in meta:
         return meta["anomalyDistribution"]
     raise HTTPException(status_code=503, detail="Trained model anomaly distribution is unavailable.")
-

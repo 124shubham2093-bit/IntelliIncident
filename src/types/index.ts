@@ -137,6 +137,7 @@ export interface IncidentDetails extends Incident {
   githubSourceEvidence?: GitHubSourceEvidence | null;
   deployedCommit?: string | null;
   environmentName?: string | null;
+  sentryEvidence?: SentryEvidence | null;
 }
 
 // GitHub Code Intelligence Types
@@ -258,6 +259,109 @@ export interface GitHubSourceEvidence {
   raw_code?: string | null;
   message: string;
 }
+
+// ==========================================
+// Sentry Runtime Error Intelligence Types
+// ==========================================
+
+export interface SentryRateLimit {
+  limit: number;
+  remaining: number;
+  reset_at?: number | null;
+  concurrent?: number | null;
+}
+
+export interface SentryStatus {
+  configured: boolean;
+  authenticated: boolean;
+  reachable: boolean;
+  org_slug?: string | null;
+  project_slug?: string | null;
+  base_url: string;
+  rate_limit?: SentryRateLimit | null;
+  message?: string | null;
+}
+
+export interface SentryProject {
+  id: string;
+  slug: string;
+  name: string;
+  organization_slug: string;
+  platform?: string | null;
+  is_active: boolean;
+  has_access: boolean;
+}
+
+export interface SentryStackFrame {
+  filename?: string | null;
+  function?: string | null;
+  module?: string | null;
+  lineno?: number | null;
+  colno?: number | null;
+  context_line?: string | null;
+  in_app: boolean;
+}
+
+export interface SentryException {
+  type: string;
+  value: string;
+  module?: string | null;
+  frames: SentryStackFrame[];
+}
+
+export interface SentryTag {
+  key: string;
+  value: string;
+}
+
+export interface SentryEvent {
+  id: string;
+  event_id: string;
+  title?: string | null;
+  message?: string | null;
+  timestamp?: string | null;
+  platform?: string | null;
+  environment?: string | null;
+  release?: string | null;
+  culprit?: string | null;
+  exceptions: SentryException[];
+  tags: SentryTag[];
+  permalink?: string | null;
+}
+
+export interface SentryIssue {
+  id: string;
+  short_id?: string | null;
+  title: string;
+  culprit?: string | null;
+  type?: string | null;
+  level?: string | null;
+  count: number;
+  user_count: number;
+  first_seen?: string | null;
+  last_seen?: string | null;
+  permalink?: string | null;
+  status?: string | null;
+  metadata?: Record<string, any>;
+  latest_event?: SentryEvent | null;
+}
+
+export interface SentryEvidence {
+  status: string; // "CONNECTED" | "NO_ISSUES_FOUND" | "NOT_CONFIGURED" | "UNAVAILABLE" | "AUTH_ERROR" | "RATE_LIMITED"
+  org_slug?: string | null;
+  project_slug?: string | null;
+  issue_count: number;
+  issues: SentryIssue[];
+  latest_issue?: SentryIssue | null;
+  latest_event?: SentryEvent | null;
+  matched_exception_type?: string | null;
+  matched_exception_value?: string | null;
+  matched_stack_trace_frames: SentryStackFrame[];
+  correlated_release?: string | null;
+  correlated_environment?: string | null;
+  message: string;
+}
+
 
 
 export interface ServiceHealth {

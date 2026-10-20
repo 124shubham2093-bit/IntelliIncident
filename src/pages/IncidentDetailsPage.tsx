@@ -18,6 +18,7 @@ import { EvidenceTimeline } from '@/components/Incident/EvidenceTimeline';
 import { RootCauseList } from '@/components/Incident/RootCauseList';
 import { RecommendationsList } from '@/components/Incident/RecommendationsList';
 import { GitHubCommitCard } from '@/components/Incident/GitHubCommitCard';
+import { SentryEvidenceCard } from '@/components/Incident/SentryEvidenceCard';
 import { getIncidentById } from '@/api/incidents';
 import { IncidentDetails } from '@/types';
 
@@ -344,6 +345,14 @@ export const IncidentDetailsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Sentry Runtime Error Evidence */}
+      {incident.sentryEvidence && (
+        <SentryEvidenceCard
+          evidence={incident.sentryEvidence}
+          rootCauseCandidates={incident.rootCauseCandidates}
+        />
+      )}
 
       {/* SECTION 3: ML Analysis */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5">

@@ -15,9 +15,11 @@ from backend.app.fuzzy.fuzzy_engine import FuzzyRiskEngine
 from backend.app.rca.root_cause_engine import RootCauseEngine
 from backend.app.services.recommendation_service import RecommendationService
 from backend.app.services.github_service import GitHubService
+from backend.app.services.sentry_service import SentryService
 from backend.app.services.project_service import ProjectService
 from backend.app.schemas.incident import IncidentCreatePayload
 from backend.app.schemas.github import GitHubSourceEvidence, GitHubSourceLocation, GitHubSourceLine
+from backend.app.schemas.sentry import SentryEvidence
 from backend.app.services.stack_trace_parser import parse_stack_trace
 
 HEX_COMMIT_REGEX = re.compile(r"^[0-9a-fA-F]{7,40}$")
@@ -30,6 +32,7 @@ class IncidentService:
         self.fuzzy_engine = FuzzyRiskEngine()
         self.root_cause_engine = RootCauseEngine()
         self.github_service = GitHubService()
+        self.sentry_service = SentryService()
         self.project_service = ProjectService()
 
     @staticmethod
@@ -407,31 +410,7 @@ class IncidentService:
                     repo_name = app_resolved["repo_name"]
                     default_branch = app_resolved.get("default_branch") or "main"
 
-        github_commits = await self._fetch_deployment_commits(
-            deps_list,
-            repo_owner=repo_owner,
-            repo_name=repo_name,
-            default_branch=default_branch,
-        )
-        root_causes = self.root_cause_engine.analyze(
-            incident=incident_dict,
-            metrics=metrics,
-            logs=logs_list,
-            deployments=deps_list,
-            tickets=tickets_list,
-            github_commits=github_commits,
-        )
-
-        # Recommendations based on top candidate
-        top_cand = root_causes[0] if root_causes else {"category": "CODE_ERROR"}
-        recommendations = RecommendationService.generate_recommendations(
-            top_candidate=top_cand,
-            service_name=inc_row["service"],
-            severity=inc_row["severity"],
-            github_commits=github_commits,
-        )
-
-        # Resolve deployed commit and environment name
+        # Resolve deployed commit and environment name early for cross-source RCA correlation
         deployed_commit = None
         environment_name = None
         if deps_list:
@@ -451,6 +430,38 @@ class IncidentService:
                 if not deployed_commit and env_rec.get("current_commit"):
                     deployed_commit = env_rec["current_commit"]
 
+        github_commits = await self._fetch_deployment_commits(
+            deps_list,
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            default_branch=default_branch,
+        )
+
+        sentry_evidence = await self.sentry_service.get_runtime_evidence(
+            service=inc_row["service"],
+            environment=environment_name,
+            release=deployed_commit,
+        )
+
+        root_causes = self.root_cause_engine.analyze(
+            incident=incident_dict,
+            metrics=metrics,
+            logs=logs_list,
+            deployments=deps_list,
+            tickets=tickets_list,
+            github_commits=github_commits,
+            sentry_evidence=sentry_evidence,
+        )
+
+        # Recommendations based on top candidate
+        top_cand = root_causes[0] if root_causes else {"category": "CODE_ERROR"}
+        recommendations = RecommendationService.generate_recommendations(
+            top_candidate=top_cand,
+            service_name=inc_row["service"],
+            severity=inc_row["severity"],
+            github_commits=github_commits,
+        )
+
         # End-to-end GitHub Source Investigation
         github_source_evidence = await self._resolve_github_source_evidence(
             logs=logs_list,
@@ -459,6 +470,8 @@ class IncidentService:
             repo_name=repo_name,
             default_branch=default_branch,
         )
+
+        s_ev_dump = sentry_evidence.model_dump() if hasattr(sentry_evidence, "model_dump") else sentry_evidence
 
         return {
             "id": inc_row["id"],
@@ -491,6 +504,8 @@ class IncidentService:
             "githubCommits": github_commits,
             "githubSourceEvidence": github_source_evidence.model_dump() if hasattr(github_source_evidence, "model_dump") else github_source_evidence,
             "github_source_evidence": github_source_evidence.model_dump() if hasattr(github_source_evidence, "model_dump") else github_source_evidence,
+            "sentryEvidence": s_ev_dump,
+            "sentry_evidence": s_ev_dump,
             "deployedCommit": deployed_commit,
             "deployed_commit": deployed_commit,
             "environmentName": environment_name,
@@ -709,6 +724,11 @@ class IncidentService:
             repo_name=repo_name,
             default_branch=default_branch,
         )
+        sentry_evidence = await self.sentry_service.get_runtime_evidence(
+            service=payload.service,
+            environment=env_name,
+            release=resolved_commit_sha,
+        )
         root_causes = self.root_cause_engine.analyze(
             incident=temp_inc,
             metrics=metrics_dict,
@@ -716,6 +736,7 @@ class IncidentService:
             deployments=deps_list,
             tickets=tickets_list,
             github_commits=github_commits,
+            sentry_evidence=sentry_evidence,
         )
         top_category = root_causes[0]["category"] if root_causes else "CODE_ERROR"
 
@@ -804,4 +825,3 @@ class IncidentService:
         conn.close()
 
         return await self.get_incident_details(incident_id)
-

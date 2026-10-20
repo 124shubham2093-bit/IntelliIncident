@@ -170,4 +170,3 @@ def test_create_and_ingest_incident_pipeline(client):
     retrieved_data = get_res.json()
     assert retrieved_data["id"] == "INC-TEST-9999"
     assert retrieved_data["title"] == "Payment Microservice Connection Timeout Spike"
-

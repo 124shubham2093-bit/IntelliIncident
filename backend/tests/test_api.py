@@ -88,4 +88,3 @@ def test_analyze_inc_8610_consistency(client):
     assert "anomaly" in data
     assert "detected" in data["anomaly"]
     assert "score" in data["anomaly"]
-

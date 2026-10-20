@@ -75,4 +75,3 @@ def test_fuzzy_risk_engine_no_false_rule_06_on_high_error():
         })
         triggered_ids = [r["id"] for r in result["triggeredRules"]]
         assert "RULE-06" not in triggered_ids, f"RULE-06 fired with errorRate={high_err}"
-

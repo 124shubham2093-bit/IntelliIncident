@@ -11,6 +11,7 @@ import { SeverityBadge } from '@/components/Common/SeverityBadge';
 import { RiskBadge } from '@/components/Common/RiskBadge';
 import { EvidenceTimeline } from '@/components/Incident/EvidenceTimeline';
 import { RootCauseList } from '@/components/Incident/RootCauseList';
+import { SentryEvidenceCard } from '@/components/Incident/SentryEvidenceCard';
 import { getIncidents, getIncidentById } from '@/api/incidents';
 import { Incident, IncidentDetails } from '@/types';
 
@@ -200,13 +201,33 @@ export const InvestigationPage: React.FC = () => {
 
               <div className="bg-slate-950/80 border border-slate-800 rounded p-3 flex items-start gap-2.5">
                 <AlertOctagon className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-xs font-mono font-semibold text-slate-200 block">
-                    Runtime Errors
-                  </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    HTTP 5xx spikes, exception stack traces
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-mono font-semibold text-slate-200 block">
+                      Runtime Errors
+                    </span>
+                    {incidentDetail.sentryEvidence && incidentDetail.sentryEvidence.status === 'CONNECTED' && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                        Sentry Active
+                      </span>
+                    )}
+                  </div>
+                  {incidentDetail.sentryEvidence && incidentDetail.sentryEvidence.status === 'CONNECTED' ? (
+                    <div className="mt-1 space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                        <span className="text-rose-400 font-semibold truncate">
+                          {incidentDetail.sentryEvidence.matched_exception_type || `${incidentDetail.sentryEvidence.issue_count} issue(s)`}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 truncate" title={incidentDetail.sentryEvidence.message}>
+                        {incidentDetail.sentryEvidence.message}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      HTTP 5xx spikes, exception stack traces
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -297,6 +318,14 @@ export const InvestigationPage: React.FC = () => {
               ))}
             </div>
           </div>
+
+          {/* Sentry Runtime Error Evidence */}
+          {incidentDetail.sentryEvidence && (
+            <SentryEvidenceCard
+              evidence={incidentDetail.sentryEvidence}
+              rootCauseCandidates={incidentDetail.rootCauseCandidates}
+            />
+          )}
 
           {/* Side by side: Timeline and Root Cause Candidates */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

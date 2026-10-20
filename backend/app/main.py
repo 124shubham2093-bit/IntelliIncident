@@ -6,12 +6,29 @@ Risk Assessment and Root Cause Analysis System
 
 import os
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.core.config import settings
+from backend.app.core.sentry import init_sentry
 from backend.app.db.database import init_db
-from backend.app.api.routes import health, incidents, analysis, analytics, fuzzy, root_cause, reports, github, projects
+from backend.app.api.routes import (
+    health,
+    incidents,
+    analysis,
+    analytics,
+    fuzzy,
+    root_cause,
+    reports,
+    github,
+    projects,
+    sentry,
+)
+
+# Initialize Sentry SDK for application error monitoring if SENTRY_DSN is configured
+init_sentry()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,12 +39,17 @@ async def lifespan(app: FastAPI):
     # Shutdown actions
     print("IntelliIncident backend shutting down.")
 
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="AI/ML and Soft Computing Based Intelligent Incident Detection, Risk Assessment and Root Cause Analysis System",
+    description=(
+        "AI/ML and Soft Computing Based Intelligent Incident Detection, "
+        "Risk Assessment and Root Cause Analysis System"
+    ),
     version=settings.VERSION,
     lifespan=lifespan,
 )
+
 
 # CORS configuration
 app.add_middleware(
@@ -37,6 +59,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Register API routers with /api prefix
 app.include_router(health.router, prefix="/api")
@@ -48,13 +71,17 @@ app.include_router(root_cause.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(github.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
+app.include_router(sentry.router, prefix="/api")
 
 
 @app.get("/")
 async def root():
     return {
         "project": settings.PROJECT_NAME,
-        "title": "AI/ML and Soft Computing Based Intelligent Incident Detection, Risk Assessment and Root Cause Analysis System",
+        "title": (
+            "AI/ML and Soft Computing Based Intelligent Incident Detection, "
+            "Risk Assessment and Root Cause Analysis System"
+        ),
         "version": settings.VERSION,
         "docs": "/docs",
         "status": "operational",

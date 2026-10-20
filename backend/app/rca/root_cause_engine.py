@@ -46,6 +46,7 @@ class RootCauseEngine:
         deployments: List[Dict[str, Any]] = None,
         tickets: List[Dict[str, Any]] = None,
         github_commits: Optional[List[Dict[str, Any]]] = None,
+        sentry_evidence: Optional[Any] = None,
     ) -> List[Dict[str, Any]]:
         logs = logs or []
         deployments = deployments or []
@@ -58,6 +59,7 @@ class RootCauseEngine:
             deployments,
             tickets,
             github_commits=github_commits,
+            sentry_evidence=sentry_evidence,
         )
 
         candidates = []

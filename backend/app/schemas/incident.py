@@ -5,6 +5,7 @@ from backend.app.schemas.analytics import AnomalyResult, SeverityPrediction
 from backend.app.schemas.fuzzy import FuzzyRiskResult
 from backend.app.schemas.root_cause import EvidenceEvent, RootCauseCandidate, Recommendation
 from backend.app.schemas.github import GitHubCommitDetail, GitHubSourceEvidence
+from backend.app.schemas.sentry import SentryEvidence
 
 
 IncidentSeverity = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
@@ -60,6 +61,8 @@ class IncidentDetails(Incident):
     deployed_commit: Optional[str] = None
     environmentName: Optional[str] = None
     environment_name: Optional[str] = None
+    sentryEvidence: Optional[SentryEvidence] = None
+    sentry_evidence: Optional[SentryEvidence] = None
 
 class TelemetryInput(BaseModel):
     error_rate: float
