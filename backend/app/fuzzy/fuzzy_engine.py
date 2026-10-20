@@ -31,11 +31,12 @@ class FuzzyRiskEngine:
         Evaluate fuzzy risk from crisp operational inputs using scikit-fuzzy.
         Supports both camelCase and snake_case keys.
         """
-        error_rate = float(inputs.get("errorRate", inputs.get("error_rate", 0.0)))
-        user_impact = float(inputs.get("userImpact", inputs.get("user_impact", 0.0)))
-        latency = float(inputs.get("latency", inputs.get("latency_p99", 0.0)))
-        deployment_recency = float(inputs.get("deploymentRecency", inputs.get("deployment_recency_minutes", 180.0)))
-        service_criticality = float(inputs.get("serviceCriticality", inputs.get("service_criticality", 3.0)))
+        # 0. Domain bounding to input universes of discourse
+        error_rate = float(np.clip(float(inputs.get("errorRate", inputs.get("error_rate", 0.0))), 0.0, 50.0))
+        user_impact = float(np.clip(float(inputs.get("userImpact", inputs.get("user_impact", 0.0))), 0.0, 100.0))
+        latency = float(np.clip(float(inputs.get("latency", inputs.get("latency_p99", 0.0))), 0.0, 3000.0))
+        deployment_recency = float(np.clip(float(inputs.get("deploymentRecency", inputs.get("deployment_recency_minutes", 180.0))), 0.0, 180.0))
+        service_criticality = float(np.clip(float(inputs.get("serviceCriticality", inputs.get("service_criticality", 3.0))), 1.0, 5.0))
 
         # 1. Fuzzification using scikit-fuzzy interpolation across universe
         memberships = {
@@ -121,23 +122,11 @@ class FuzzyRiskEngine:
         # Sort triggered rules by activation weight descending
         triggered_rules.sort(key=lambda r: r["weight"], reverse=True)
 
-        # Baseline fallback rule if none activated
-        if len(triggered_rules) == 0:
-            default_weight = 0.5
-            triggered_rules.append({
-                "id": "RULE-06",
-                "ruleText": "IF Error Rate is LOW AND User Impact is LOW THEN Risk is LOW",
-                "weight": default_weight,
-                "contribution": "Baseline nominal state activation.",
-            })
-            consequent_shape = OUTPUT_MEMBERSHIPS["shapes"]["LOW"]
-            aggregated_output = np.fmin(default_weight, consequent_shape)
-
         # 3. Defuzzification via scikit-fuzzy's centroid method
         if np.sum(aggregated_output) > 1e-6:
             coa_score = float(fuzz.defuzz(self.z_universe, aggregated_output, "centroid"))
         else:
-            coa_score = 15.0
+            coa_score = 0.0
 
         rounded_score = int(round(np.clip(coa_score, 0.0, 100.0)))
 

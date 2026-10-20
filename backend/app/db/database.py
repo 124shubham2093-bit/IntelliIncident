@@ -97,5 +97,60 @@ def init_db():
     );
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        slug TEXT UNIQUE NOT NULL,
+        description TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS applications (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        description TEXT,
+        language TEXT NOT NULL,
+        framework TEXT,
+        repo_owner TEXT,
+        repo_name TEXT,
+        default_branch TEXT NOT NULL DEFAULT 'main',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (project_id) REFERENCES projects (id)
+    );
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS environments (
+        id TEXT PRIMARY KEY,
+        application_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        api_key TEXT UNIQUE NOT NULL,
+        endpoint_url TEXT,
+        current_commit TEXT,
+        is_production INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (application_id) REFERENCES applications (id)
+    );
+    """)
+
+    # Safely migrate incidents table with topology foreign references if not present
+    cursor.execute("PRAGMA table_info(incidents);")
+    existing_cols = {row["name"] for row in cursor.fetchall()}
+    if "project_id" not in existing_cols:
+        cursor.execute("ALTER TABLE incidents ADD COLUMN project_id TEXT;")
+    if "application_id" not in existing_cols:
+        cursor.execute("ALTER TABLE incidents ADD COLUMN application_id TEXT;")
+    if "environment_id" not in existing_cols:
+        cursor.execute("ALTER TABLE incidents ADD COLUMN environment_id TEXT;")
+
     conn.commit()
     conn.close()

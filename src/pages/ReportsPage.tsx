@@ -12,16 +12,21 @@ import { Incident, IncidentDetails } from '@/types';
 
 export const ReportsPage: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [selectedId, setSelectedId] = useState<string>('INC-8492');
+  const [selectedId, setSelectedId] = useState<string>('');
   const [incident, setIncident] = useState<IncidentDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadIncidents() {
+      setLoading(true);
       const res = await getIncidents();
       setIncidents(res.data);
-      if (res.data.length > 0 && !res.data.some((i) => i.id === selectedId)) {
+      if (res.data.length > 0) {
         setSelectedId(res.data[0].id);
+      } else {
+        setSelectedId('');
+        setIncident(null);
+        setLoading(false);
       }
     }
     loadIncidents();
@@ -29,17 +34,23 @@ export const ReportsPage: React.FC = () => {
 
   useEffect(() => {
     async function loadReport() {
-      if (!selectedId) return;
+      if (!selectedId) {
+        setIncident(null);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       const res = await getIncidentReport(selectedId);
-      setIncident(res.data.incident);
+      setIncident(res.data?.incident || null);
       setLoading(false);
     }
     loadReport();
   }, [selectedId]);
 
   const handlePrint = () => {
-    window.print();
+    if (incident) {
+      window.print();
+    }
   };
 
   return (
@@ -57,19 +68,25 @@ export const ReportsPage: React.FC = () => {
             <select
               value={selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
-              className="bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono text-teal-300 font-semibold focus:outline-none focus:border-teal-500"
+              disabled={incidents.length === 0}
+              className="bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-xs font-mono text-teal-300 font-semibold focus:outline-none focus:border-teal-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
             >
-              {incidents.map((inc) => (
-                <option key={inc.id} value={inc.id}>
-                  {inc.id} — {inc.service}
-                </option>
-              ))}
+              {incidents.length === 0 ? (
+                <option value="">No incidents available</option>
+              ) : (
+                incidents.map((inc) => (
+                  <option key={inc.id} value={inc.id}>
+                    {inc.id} — {inc.service}
+                  </option>
+                ))
+              )}
             </select>
 
             <button
               type="button"
               onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 rounded bg-teal-500 hover:bg-teal-600 text-slate-950 font-bold font-mono text-xs transition-colors shadow-sm cursor-pointer"
+              disabled={!incident}
+              className="flex items-center gap-2 px-4 py-2 rounded bg-teal-500 hover:bg-teal-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-slate-950 font-bold font-mono text-xs transition-colors shadow-sm cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>Print Report</span>
@@ -82,6 +99,18 @@ export const ReportsPage: React.FC = () => {
       {loading ? (
         <div className="py-20 text-center font-mono text-sm text-slate-400">
           Compiling investigation report dossier...
+        </div>
+      ) : incidents.length === 0 ? (
+        <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-12 text-center max-w-xl mx-auto space-y-4 my-8">
+          <div className="w-12 h-12 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center mx-auto text-slate-400">
+            <Printer className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold text-slate-200">No Incident Reports Available</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-sans">
+              The system database is currently empty in real-data mode. Ingest telemetry or create an incident via <code className="text-teal-400 font-mono">POST /api/incidents</code> to generate and print post-mortem investigation dossiers.
+            </p>
+          </div>
         </div>
       ) : incident ? (
         <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-6 sm:p-10 space-y-8 print:p-0 print:border-none print:bg-white print:text-black">

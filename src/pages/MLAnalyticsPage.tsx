@@ -12,14 +12,14 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
-import { getMLAnalyticsData } from '@/api/analytics';
+import { getMLAnalyticsData, AnomalyDistributionBin } from '@/api/analytics';
 import { MLMetrics, FeatureImportance, ConfusionMatrixRow } from '@/types';
-import { DEMO_ANOMALY_DISTRIBUTION } from '@/data/demoAnalytics';
 
 export const MLAnalyticsPage: React.FC = () => {
   const [metrics, setMetrics] = useState<MLMetrics | null>(null);
   const [featureImportance, setFeatureImportance] = useState<FeatureImportance[]>([]);
   const [confusionMatrix, setConfusionMatrix] = useState<ConfusionMatrixRow[]>([]);
+  const [anomalyDistribution, setAnomalyDistribution] = useState<AnomalyDistributionBin[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,6 +29,7 @@ export const MLAnalyticsPage: React.FC = () => {
       setMetrics(res.data.metrics);
       setFeatureImportance(res.data.featureImportance);
       setConfusionMatrix(res.data.confusionMatrix);
+      setAnomalyDistribution(res.data.anomalyDistribution);
       setLoading(false);
     }
     loadData();
@@ -134,7 +135,7 @@ export const MLAnalyticsPage: React.FC = () => {
 
                 <div className="h-56 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={DEMO_ANOMALY_DISTRIBUTION} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <BarChart data={anomalyDistribution} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="2 2" stroke="#1e293b" />
                       <XAxis dataKey="bin" stroke="#64748b" fontSize={10} fontFamily="monospace" />
                       <YAxis stroke="#64748b" fontSize={10} fontFamily="monospace" />

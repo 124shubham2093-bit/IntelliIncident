@@ -12,8 +12,8 @@ class AnalysisService:
     def __init__(self):
         self.incident_service = IncidentService()
 
-    def analyze_incident(self, incident_id: str) -> Optional[Dict[str, Any]]:
-        details = self.incident_service.get_incident_details(incident_id)
+    async def analyze_incident(self, incident_id: str) -> Optional[Dict[str, Any]]:
+        details = await self.incident_service.get_incident_details(incident_id)
         if not details:
             return None
 

@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   AlertTriangle,
   SearchCode,
   BrainCircuit,
-  Sliders,
   FileText,
   ShieldCheck,
   Menu,
@@ -13,18 +12,43 @@ import {
   Radio,
   Clock,
   Activity,
+  Server,
 } from 'lucide-react';
+import { getGitHubStatus } from '@/api/github';
 
 export const AppLayout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [githubStatus, setGithubStatus] = useState<'Operational' | 'Unconfigured' | 'Unreachable' | 'Checking'>('Checking');
   const location = useLocation();
+
+  useEffect(() => {
+    let isMounted = true;
+    getGitHubStatus()
+      .then(({ data }) => {
+        if (!isMounted) return;
+        if (data && data.reachable && data.configured) {
+          setGithubStatus('Operational');
+        } else if (data && !data.configured) {
+          setGithubStatus('Unconfigured');
+        } else {
+          setGithubStatus('Unreachable');
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setGithubStatus('Unreachable');
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const navItems = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
     { to: '/investigation', label: 'Investigation', icon: SearchCode },
+    { to: '/topology', label: 'Applications', icon: Server },
     { to: '/ml-analytics', label: 'ML Analytics', icon: BrainCircuit },
-    { to: '/fuzzy-risk', label: 'Fuzzy Risk', icon: Sliders },
     { to: '/reports', label: 'Reports', icon: FileText },
   ];
 
@@ -137,11 +161,40 @@ export const AppLayout: React.FC = () => {
             </div>
 
             {/* Fuzzy Engine */}
-            <div className="flex items-center justify-between py-1">
+            <div className="flex items-center justify-between py-1 border-b border-slate-800/60">
               <span className="text-slate-400 text-[11px]">Fuzzy Engine</span>
               <span className="flex items-center gap-1.5 text-teal-400 text-[11px] font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-teal-400"></span>
                 Active
+              </span>
+            </div>
+
+            {/* GitHub Intelligence */}
+            <div className="flex items-center justify-between py-1" title={`GitHub code intelligence: ${githubStatus}`}>
+              <span className="text-slate-400 text-[11px]">GitHub Intel</span>
+              <span
+                className={`flex items-center gap-1.5 text-[11px] font-medium ${
+                  githubStatus === 'Operational'
+                    ? 'text-teal-400'
+                    : githubStatus === 'Unconfigured'
+                    ? 'text-slate-400'
+                    : githubStatus === 'Unreachable'
+                    ? 'text-rose-400'
+                    : 'text-slate-500'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    githubStatus === 'Operational'
+                      ? 'bg-teal-400'
+                      : githubStatus === 'Unconfigured'
+                      ? 'bg-slate-500'
+                      : githubStatus === 'Unreachable'
+                      ? 'bg-rose-400'
+                      : 'bg-slate-500 animate-pulse'
+                  }`}
+                />
+                {githubStatus}
               </span>
             </div>
           </div>

@@ -5,8 +5,11 @@ import {
   SearchCode,
   Activity,
   BrainCircuit,
-  Sliders,
   FileText,
+  GitCommit,
+  FileCode,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
 import { SeverityBadge } from '@/components/Common/SeverityBadge';
 import { RiskBadge } from '@/components/Common/RiskBadge';
@@ -14,6 +17,8 @@ import { StatusBadge } from '@/components/Common/StatusBadge';
 import { EvidenceTimeline } from '@/components/Incident/EvidenceTimeline';
 import { RootCauseList } from '@/components/Incident/RootCauseList';
 import { RecommendationsList } from '@/components/Incident/RecommendationsList';
+import { GitHubCommitCard } from '@/components/Incident/GitHubCommitCard';
+import { SentryEvidenceCard } from '@/components/Incident/SentryEvidenceCard';
 import { getIncidentById } from '@/api/incidents';
 import { IncidentDetails } from '@/types';
 
@@ -107,6 +112,24 @@ export const IncidentDetailsPage: React.FC = () => {
               <span>Service:</span>
               <span className="text-slate-200 font-semibold">{incident.service}</span>
             </div>
+            {incident.projectId && (
+              <div className="flex justify-between text-slate-400">
+                <span>Project:</span>
+                <span className="text-teal-400 font-semibold">{incident.projectId}</span>
+              </div>
+            )}
+            {incident.environmentId && (
+              <div className="flex justify-between text-slate-400">
+                <span>Environment:</span>
+                <span className="text-cyan-400 font-semibold">{incident.environmentName || incident.environmentId}</span>
+              </div>
+            )}
+            {incident.deployedCommit && (
+              <div className="flex justify-between text-slate-400">
+                <span>Deployed Commit:</span>
+                <span className="text-cyan-400 font-semibold font-mono">{incident.deployedCommit.slice(0, 7)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-slate-400">
               <span>Timestamp:</span>
               <span className="text-slate-200">{incident.timestamp.substring(0, 16).replace('T', ' ')} UTC</span>
@@ -139,6 +162,11 @@ export const IncidentDetailsPage: React.FC = () => {
             <span className="text-sm font-bold text-slate-200 mt-1 block truncate">
               {metrics.service}
             </span>
+            {incident.environmentId && (
+              <span className="text-[10px] text-cyan-400 mt-0.5 block truncate">
+                Env: {incident.environmentId}
+              </span>
+            )}
           </div>
 
           <div className="bg-slate-950/70 border border-slate-800/90 rounded p-3">
@@ -188,13 +216,151 @@ export const IncidentDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* SECTION 2: ML Analysis */}
+      {/* SECTION 2: Code Intelligence & Deployment Evidence (GitHub) */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <GitCommit className="w-4 h-4 text-teal-400" />
+            <h3 className="text-sm font-semibold text-slate-100 font-mono uppercase tracking-wider">
+              Section 2: Code Intelligence & Deployment Evidence (GitHub)
+            </h3>
+          </div>
+          <span className="text-xs font-mono text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/30">
+            Source Control Intelligence
+          </span>
+        </div>
+
+        {/* GitHub Source Investigation & Code Context */}
+        {incident.githubSourceEvidence && incident.githubSourceEvidence.status !== 'NO_STACK_TRACE' && (
+          <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+              <div className="flex items-center gap-2">
+                <FileCode className="w-4 h-4 text-cyan-400" />
+                <h4 className="text-xs font-bold font-mono text-slate-200 uppercase tracking-wider">
+                  GitHub Source Correlation & Code Context
+                </h4>
+              </div>
+              <span
+                className={`text-[11px] font-mono px-2 py-0.5 rounded border flex items-center gap-1 ${
+                  incident.githubSourceEvidence.status === 'MATCHED'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : incident.githubSourceEvidence.status === 'FILE_NOT_FOUND'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {incident.githubSourceEvidence.status === 'MATCHED' && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+                {incident.githubSourceEvidence.status === 'FILE_NOT_FOUND' && <AlertTriangle className="w-3 h-3 text-amber-400" />}
+                <span>
+                  {incident.githubSourceEvidence.status === 'MATCHED'
+                    ? '✓ Source location matched'
+                    : incident.githubSourceEvidence.status === 'FILE_NOT_FOUND'
+                    ? 'File not found at commit'
+                    : incident.githubSourceEvidence.status === 'NO_COMMIT'
+                    ? 'Deployment commit required'
+                    : incident.githubSourceEvidence.status}
+                </span>
+              </span>
+            </div>
+
+            {/* Location & Commit Metadata */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-mono">
+              <div className="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 block uppercase">Source File</span>
+                <span className="text-cyan-300 font-semibold truncate block mt-0.5" title={incident.githubSourceEvidence.file_path || 'None'}>
+                  {incident.githubSourceEvidence.file_path || 'None'}
+                </span>
+              </div>
+              <div className="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 block uppercase">Target Line</span>
+                <span className="text-rose-400 font-semibold block mt-0.5">
+                  Line {incident.githubSourceEvidence.target_line || incident.githubSourceEvidence.location?.line_number || 'N/A'}
+                  {incident.githubSourceEvidence.location?.function_name ? ` (in ${incident.githubSourceEvidence.location.function_name})` : ''}
+                </span>
+              </div>
+              <div className="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+                <span className="text-[10px] text-slate-400 block uppercase">Deployment Commit</span>
+                <span className="text-teal-400 font-semibold block mt-0.5 truncate" title={incident.githubSourceEvidence.deployment_commit || 'None'}>
+                  {incident.githubSourceEvidence.deployment_commit ? incident.githubSourceEvidence.deployment_commit.slice(0, 7) : (incident.deployedCommit ? incident.deployedCommit.slice(0, 7) : 'None')}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 font-sans italic">
+              {incident.githubSourceEvidence.message}
+            </p>
+
+            {/* Surrounding Code Window */}
+            {incident.githubSourceEvidence.source_lines && incident.githubSourceEvidence.source_lines.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pb-1">
+                  <span>Source Context (Commit {incident.githubSourceEvidence.deployment_commit?.slice(0, 7) || 'HEAD'})</span>
+                  <span className="text-slate-500">{incident.githubSourceEvidence.file_path}</span>
+                </div>
+                <div className="bg-slate-950 rounded border border-slate-800 overflow-x-auto p-2 font-mono text-xs">
+                  {incident.githubSourceEvidence.source_lines.map((sl) => (
+                    <div
+                      key={sl.line_number}
+                      className={`flex items-center px-2 py-0.5 rounded ${
+                        sl.is_target
+                          ? 'bg-rose-950/50 text-rose-300 font-semibold border-l-2 border-rose-500'
+                          : 'text-slate-400 hover:bg-slate-900/40'
+                      }`}
+                    >
+                      <span className="w-10 shrink-0 text-right pr-3 select-none text-[11px] text-slate-600">
+                        {sl.line_number}
+                      </span>
+                      <pre className="overflow-x-auto whitespace-pre font-mono text-[11px]">
+                        {sl.content}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {incident.githubCommits && incident.githubCommits.length > 0 ? (
+          <div className="space-y-4">
+            {incident.githubCommits.map((commit) => (
+              <GitHubCommitCard
+                key={commit.sha}
+                commit={commit}
+                rootCauseCandidates={incident.rootCauseCandidates}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-6 text-center space-y-2">
+            <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
+              <GitCommit className="w-4 h-4" />
+            </div>
+            <p className="text-xs font-mono text-slate-400">
+              No deployment commit hash is associated with this incident.
+            </p>
+            <p className="text-[11px] font-sans text-slate-500 max-w-md mx-auto">
+              When deployments cite a valid Git commit SHA, IntelliIncident retrieves commit metadata, modified files, and diff statistics to correlate code changes with runtime evidence.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Sentry Runtime Error Evidence */}
+      {incident.sentryEvidence && (
+        <SentryEvidenceCard
+          evidence={incident.sentryEvidence}
+          rootCauseCandidates={incident.rootCauseCandidates}
+        />
+      )}
+
+      {/* SECTION 3: ML Analysis */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800 mb-4">
           <div className="flex items-center gap-2">
             <BrainCircuit className="w-4 h-4 text-purple-400" />
             <h3 className="text-sm font-semibold text-slate-100 font-mono uppercase tracking-wider">
-              Section 2: Machine Learning Inference Analysis
+              Section 3: Machine Learning Inference Analysis
             </h3>
           </div>
           <span className="text-xs font-mono text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/30">
@@ -307,13 +473,13 @@ export const IncidentDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* SECTION 3: Fuzzy Risk Assessment */}
+      {/* SECTION 4: Fuzzy Risk Assessment */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800 mb-4">
           <div className="flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-amber-400" />
+            <BrainCircuit className="w-4 h-4 text-amber-400" />
             <h3 className="text-sm font-semibold text-slate-100 font-mono uppercase tracking-wider">
-              Section 3: Soft Computing Fuzzy Risk Assessment
+              Section 4: Mamdani Fuzzy Risk Assessment
             </h3>
           </div>
           <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
@@ -380,9 +546,14 @@ export const IncidentDetailsPage: React.FC = () => {
           {/* Risk Score & Level Output */}
           <div className="bg-slate-950/80 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
             <div>
-              <span className="text-xs font-mono font-semibold text-slate-200 block mb-2">
-                Fuzzy Inference Output
-              </span>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-mono font-semibold text-slate-200 block">
+                  Fuzzy Risk Assessment
+                </span>
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 font-semibold">
+                  System Generated (Read-Only)
+                </span>
+              </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-extrabold font-mono text-rose-400">
                   {fuzzyRisk.riskScore}
@@ -393,12 +564,12 @@ export const IncidentDetailsPage: React.FC = () => {
                 <RiskBadge risk={fuzzyRisk.riskLevel} />
               </div>
               <p className="mt-3 text-xs text-slate-400 font-sans leading-relaxed">
-                Evaluated using {fuzzyRisk.defuzzificationMethod} across continuous linguistic variables.
+                Calculated automatically from incident telemetry using the Mamdani fuzzy inference engine.
               </p>
             </div>
 
             <div className="mt-3 pt-2 border-t border-slate-900 text-[10px] font-mono text-slate-400">
-              Soft Computing &bull; Heuristic Knowledge Base
+              Soft Computing &bull; 28 Mamdani Rules &bull; Centroid Defuzzification
             </div>
           </div>
 
@@ -429,13 +600,13 @@ export const IncidentDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* SECTION 4: Evidence Timeline */}
+      {/* SECTION 5: Evidence Timeline */}
       <EvidenceTimeline events={incident.evidenceTimeline} />
 
-      {/* SECTION 5: Root Cause Analysis */}
+      {/* SECTION 6: Root Cause Analysis */}
       <RootCauseList candidates={incident.rootCauseCandidates} />
 
-      {/* SECTION 6: Recommendations */}
+      {/* SECTION 7: Recommendations */}
       <RecommendationsList recommendations={incident.recommendations} />
     </div>
   );

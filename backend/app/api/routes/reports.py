@@ -9,7 +9,7 @@ incident_service = IncidentService()
 
 @router.get("/reports/{incident_id}", response_model=IncidentReportResponse)
 async def get_incident_report(incident_id: str):
-    incident = incident_service.get_incident_details(incident_id)
+    incident = await incident_service.get_incident_details(incident_id)
     if not incident:
         raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
 

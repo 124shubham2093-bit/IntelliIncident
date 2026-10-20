@@ -9,15 +9,46 @@ All suggested commands are explicitly labeled as "Operator action" / "Suggested 
 for manual review and execution by human SRE/on-call engineers.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from backend.app.core.config import settings
 
 class RecommendationService:
     @staticmethod
-    def generate_recommendations(top_candidate: Dict[str, Any], service_name: str, severity: str) -> List[Dict[str, Any]]:
+    def generate_recommendations(
+        top_candidate: Dict[str, Any],
+        service_name: str,
+        severity: str,
+        github_commits: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
         category = top_candidate.get("category", "CODE_ERROR")
         recommendations = []
 
         if category == "DEPLOYMENT":
+            repo_slug = (
+                f"{settings.GITHUB_REPO_OWNER}/{settings.GITHUB_REPO_NAME}"
+                if settings.GITHUB_REPO_OWNER and settings.GITHUB_REPO_NAME
+                else f"org/{service_name}"
+            )
+            rec02_cmd = f"gh release view --repo {repo_slug} --json tagName,publishedAt"
+            rec02_desc = (
+                "Operator action: Review recent commit diffs and migration scripts pushed in the last release window. "
+                "Check for unhandled null safety or altered environment variables."
+            )
+            rec02_title = "Inspect release commit diff for unhandled exceptions or config errors"
+            if github_commits:
+                first_c = github_commits[0]
+                c_data = first_c.model_dump() if hasattr(first_c, "model_dump") else (first_c if isinstance(first_c, dict) else {})
+                sha = c_data.get("sha", "")
+                short_sha = c_data.get("short_sha") or (sha[:7] if sha else "")
+                html_url = c_data.get("html_url") or ""
+                if short_sha:
+                    rec02_cmd = f"gh browse {short_sha} --repo {repo_slug}"
+                    rec02_title = f"Inspect commit {short_sha} diff for unhandled exceptions or config errors"
+                    if html_url:
+                        rec02_desc = f"Operator action: Review commit diff {short_sha} ({html_url}) for unhandled exceptions or breaking schema changes."
+                    else:
+                        rec02_desc = f"Operator action: Review commit diff {short_sha} for unhandled exceptions or breaking schema changes."
+
             recommendations.append({
                 "id": "REC-01",
                 "title": f"Roll back {service_name} to previous stable release",
@@ -31,14 +62,11 @@ class RecommendationService:
             })
             recommendations.append({
                 "id": "REC-02",
-                "title": "Inspect release commit diff for unhandled exceptions or config errors",
-                "description": (
-                    "Operator action: Review recent commit diffs and migration scripts pushed in the last release window. "
-                    "Check for unhandled null safety or altered environment variables."
-                ),
+                "title": rec02_title,
+                "description": rec02_desc,
                 "priority": "HIGH",
                 "category": "INVESTIGATION",
-                "actionCmd": f"gh release view --repo org/{service_name} --json tagName,publishedAt",
+                "actionCmd": rec02_cmd,
             })
             recommendations.append({
                 "id": "REC-03",
@@ -149,6 +177,21 @@ class RecommendationService:
             })
 
         else: # CODE_ERROR or NETWORK
+            rec02_desc = (
+                "Operator action: Stream real-time exception logs to identify the exact line and dependency fault."
+            )
+            if github_commits:
+                first_c = github_commits[0]
+                c_data = first_c.model_dump() if hasattr(first_c, "model_dump") else (first_c if isinstance(first_c, dict) else {})
+                sha = c_data.get("sha", "")
+                short_sha = c_data.get("short_sha") or (sha[:7] if sha else "")
+                html_url = c_data.get("html_url") or ""
+                if short_sha:
+                    if html_url:
+                        rec02_desc += f" Cross-reference with commit {short_sha} ({html_url})."
+                    else:
+                        rec02_desc += f" Cross-reference with commit {short_sha}."
+
             recommendations.append({
                 "id": "REC-01",
                 "title": f"Restart degraded pod instances of {service_name}",
@@ -163,9 +206,7 @@ class RecommendationService:
             recommendations.append({
                 "id": "REC-02",
                 "title": "Extract full stack traces from error log stream",
-                "description": (
-                    "Operator action: Stream real-time exception logs to identify the exact line and dependency fault."
-                ),
+                "description": rec02_desc,
                 "priority": "HIGH",
                 "category": "INVESTIGATION",
                 "actionCmd": f"kubectl logs -l app={service_name} --tail=200 --prefix | grep -iE 'error|fatal|exception'",

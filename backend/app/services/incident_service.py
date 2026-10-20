@@ -3,6 +3,10 @@ Incident Data Access Service for IntelliIncident
 Handles incident queries, filtering, and detailed record assembly from SQLite.
 """
 
+import datetime
+import uuid
+import random
+import re
 from typing import Dict, Any, List, Optional
 from backend.app.db.database import get_db_connection
 from backend.app.ml.anomaly_detector import AnomalyDetector
@@ -10,6 +14,16 @@ from backend.app.ml.severity_classifier import SeverityClassifier
 from backend.app.fuzzy.fuzzy_engine import FuzzyRiskEngine
 from backend.app.rca.root_cause_engine import RootCauseEngine
 from backend.app.services.recommendation_service import RecommendationService
+from backend.app.services.github_service import GitHubService
+from backend.app.services.sentry_service import SentryService
+from backend.app.services.project_service import ProjectService
+from backend.app.schemas.incident import IncidentCreatePayload
+from backend.app.schemas.github import GitHubSourceEvidence, GitHubSourceLocation, GitHubSourceLine
+from backend.app.schemas.sentry import SentryEvidence
+from backend.app.services.stack_trace_parser import parse_stack_trace
+
+HEX_COMMIT_REGEX = re.compile(r"^[0-9a-fA-F]{7,40}$")
+INVALID_REF_NAMES = {"main", "master", "head", "latest", "default"}
 
 class IncidentService:
     def __init__(self):
@@ -17,6 +31,186 @@ class IncidentService:
         self.severity_classifier = SeverityClassifier()
         self.fuzzy_engine = FuzzyRiskEngine()
         self.root_cause_engine = RootCauseEngine()
+        self.github_service = GitHubService()
+        self.sentry_service = SentryService()
+        self.project_service = ProjectService()
+
+    @staticmethod
+    def _is_valid_commit_hash(sha: Optional[str]) -> bool:
+        if not sha or not isinstance(sha, str):
+            return False
+        sha_clean = sha.strip()
+        if sha_clean.lower() in INVALID_REF_NAMES:
+            return False
+        return bool(HEX_COMMIT_REGEX.match(sha_clean))
+
+    async def _fetch_deployment_commits(
+        self,
+        deployments: List[Dict[str, Any]],
+        repo_owner: Optional[str] = None,
+        repo_name: Optional[str] = None,
+        default_branch: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        commits = []
+        seen_shas = set()
+
+        # Application-scoped GitHub repository binding with fallback to global settings
+        if repo_owner and repo_name:
+            gh_service = GitHubService(
+                owner=repo_owner,
+                repo=repo_name,
+                default_branch=default_branch or "main",
+            )
+        else:
+            gh_service = self.github_service
+
+        for dep in deployments:
+            sha = dep.get("commit_hash")
+            if not self._is_valid_commit_hash(sha):
+                continue
+            sha_clean = sha.strip()
+            if sha_clean in seen_shas:
+                continue
+            seen_shas.add(sha_clean)
+            try:
+                commit_detail = await gh_service.get_commit(sha_clean)
+                if commit_detail:
+                    c_dict = (
+                        commit_detail.model_dump()
+                        if hasattr(commit_detail, "model_dump")
+                        else (commit_detail if isinstance(commit_detail, dict) else {})
+                    )
+                    commits.append(c_dict)
+            except Exception:
+                continue
+        return commits
+
+    async def _resolve_github_source_evidence(
+        self,
+        logs: List[Dict[str, Any]],
+        commit_sha: Optional[str],
+        repo_owner: Optional[str],
+        repo_name: Optional[str],
+        default_branch: Optional[str] = "main",
+    ) -> GitHubSourceEvidence:
+        """
+        Connect runtime error stack trace to exact source code via GitHub REST API.
+        Extracts surrounding lines at the exact deployment commit SHA.
+        """
+        trace = None
+        for l in logs:
+            st = l.get("stack_trace")
+            if st and len(str(st).strip()) > 5:
+                trace = str(st).strip()
+                break
+
+        if not trace:
+            return GitHubSourceEvidence(
+                status="NO_STACK_TRACE",
+                deployment_commit=commit_sha,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                message="No stack trace provided with this incident.",
+            )
+
+        location = parse_stack_trace(trace)
+        if not location:
+            return GitHubSourceEvidence(
+                status="UNRESOLVED",
+                deployment_commit=commit_sha,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                message="Source location could not be resolved from the supplied stack trace.",
+            )
+
+        if not commit_sha or not self._is_valid_commit_hash(commit_sha):
+            return GitHubSourceEvidence(
+                status="NO_COMMIT",
+                deployment_commit=commit_sha,
+                location=location,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                file_path=location.file_path,
+                target_line=location.line_number,
+                message=f"Stack trace identified {location.file_path}:{location.line_number}, but no valid deployment commit SHA is associated.",
+            )
+
+        # Scoped GitHub service
+        if repo_owner and repo_name:
+            gh_service = GitHubService(
+                owner=repo_owner,
+                repo=repo_name,
+                default_branch=default_branch or "main",
+            )
+        else:
+            gh_service = self.github_service
+
+        try:
+            source_lines, raw_snippet, status = await gh_service.get_source_context(
+                path=location.file_path,
+                line=location.line_number,
+                ref=commit_sha,
+                window=5,
+            )
+        except Exception as e:
+            return GitHubSourceEvidence(
+                status="GITHUB_UNAVAILABLE",
+                deployment_commit=commit_sha,
+                location=location,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                file_path=location.file_path,
+                target_line=location.line_number,
+                message=f"GitHub API unreachable during source inspection: {str(e)}",
+            )
+
+        if status == "MATCHED":
+            fn_desc = f" in {location.function_name}()" if location.function_name else ""
+            return GitHubSourceEvidence(
+                status="MATCHED",
+                deployment_commit=commit_sha,
+                location=location,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                file_path=location.file_path,
+                target_line=location.line_number,
+                source_lines=source_lines,
+                raw_code=raw_snippet,
+                message=f"Matched stack trace location to repository source at deployment commit {commit_sha[:7]}{fn_desc}.",
+            )
+        elif status == "FILE_NOT_FOUND":
+            return GitHubSourceEvidence(
+                status="FILE_NOT_FOUND",
+                deployment_commit=commit_sha,
+                location=location,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                file_path=location.file_path,
+                target_line=location.line_number,
+                message=f"Source file '{location.file_path}' was not found at the associated deployment commit {commit_sha[:7]}.",
+            )
+        elif status == "GITHUB_UNAVAILABLE":
+            return GitHubSourceEvidence(
+                status="GITHUB_UNAVAILABLE",
+                deployment_commit=commit_sha,
+                location=location,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                file_path=location.file_path,
+                target_line=location.line_number,
+                message="GitHub API is unreachable or rate limit exceeded.",
+            )
+        else:
+            return GitHubSourceEvidence(
+                status="UNRESOLVED",
+                deployment_commit=commit_sha,
+                location=location,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                file_path=location.file_path,
+                target_line=location.line_number,
+                message=f"Source file status: {status}",
+            )
 
     def get_incidents(
         self,
@@ -63,6 +257,10 @@ class IncidentService:
 
         result = []
         for r in rows:
+            keys = r.keys()
+            p_id = r["project_id"] if "project_id" in keys else None
+            a_id = r["application_id"] if "application_id" in keys else None
+            e_id = r["environment_id"] if "environment_id" in keys else None
             result.append({
                 "id": r["id"],
                 "title": r["title"],
@@ -76,10 +274,16 @@ class IncidentService:
                 "timestamp": r["timestamp"],
                 "summary": r["summary"],
                 "affectedUsersCount": r["affected_users_count"],
+                "projectId": p_id,
+                "applicationId": a_id,
+                "environmentId": e_id,
+                "project_id": p_id,
+                "application_id": a_id,
+                "environment_id": e_id,
             })
         return result
 
-    def get_incident_details(self, incident_id: str) -> Optional[Dict[str, Any]]:
+    async def get_incident_details(self, incident_id: str) -> Optional[Dict[str, Any]]:
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -177,14 +381,76 @@ class IncidentService:
                 "severity": ev["severity"],
             })
 
-        # Root Cause Analysis
+        # Root Cause Analysis with GitHub Commit Evidence
         incident_dict = dict(inc_row)
+        inc_keys = inc_row.keys()
+        p_id = inc_row["project_id"] if "project_id" in inc_keys else None
+        a_id = inc_row["application_id"] if "application_id" in inc_keys else None
+        e_id = inc_row["environment_id"] if "environment_id" in inc_keys else None
+
+        # Resolve application-scoped GitHub repo
+        repo_owner = None
+        repo_name = None
+        default_branch = None
+        if a_id:
+            app_rec = self.project_service.get_application_by_id(a_id)
+            if app_rec and app_rec.get("repo_owner") and app_rec.get("repo_name"):
+                repo_owner = app_rec["repo_owner"]
+                repo_name = app_rec["repo_name"]
+                default_branch = app_rec.get("default_branch") or "main"
+        if not repo_owner:
+            app_resolved = self.project_service.resolve_service_application(inc_row["service"])
+            if app_resolved:
+                if not a_id:
+                    a_id = app_resolved["id"]
+                if not p_id:
+                    p_id = app_resolved["project_id"]
+                if app_resolved.get("repo_owner") and app_resolved.get("repo_name"):
+                    repo_owner = app_resolved["repo_owner"]
+                    repo_name = app_resolved["repo_name"]
+                    default_branch = app_resolved.get("default_branch") or "main"
+
+        # Resolve deployed commit and environment name early for cross-source RCA correlation
+        deployed_commit = None
+        environment_name = None
+        if deps_list:
+            for dep in deps_list:
+                c_hash = dep.get("commit_hash")
+                if self._is_valid_commit_hash(c_hash):
+                    deployed_commit = c_hash
+                    if dep.get("environment"):
+                        environment_name = dep["environment"]
+                    break
+
+        if e_id:
+            env_rec = self.project_service.get_environment_by_id(e_id)
+            if env_rec:
+                if not environment_name and env_rec.get("name"):
+                    environment_name = env_rec["name"]
+                if not deployed_commit and env_rec.get("current_commit"):
+                    deployed_commit = env_rec["current_commit"]
+
+        github_commits = await self._fetch_deployment_commits(
+            deps_list,
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            default_branch=default_branch,
+        )
+
+        sentry_evidence = await self.sentry_service.get_runtime_evidence(
+            service=inc_row["service"],
+            environment=environment_name,
+            release=deployed_commit,
+        )
+
         root_causes = self.root_cause_engine.analyze(
             incident=incident_dict,
             metrics=metrics,
             logs=logs_list,
             deployments=deps_list,
             tickets=tickets_list,
+            github_commits=github_commits,
+            sentry_evidence=sentry_evidence,
         )
 
         # Recommendations based on top candidate
@@ -193,7 +459,19 @@ class IncidentService:
             top_candidate=top_cand,
             service_name=inc_row["service"],
             severity=inc_row["severity"],
+            github_commits=github_commits,
         )
+
+        # End-to-end GitHub Source Investigation
+        github_source_evidence = await self._resolve_github_source_evidence(
+            logs=logs_list,
+            commit_sha=deployed_commit,
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            default_branch=default_branch,
+        )
+
+        s_ev_dump = sentry_evidence.model_dump() if hasattr(sentry_evidence, "model_dump") else sentry_evidence
 
         return {
             "id": inc_row["id"],
@@ -208,6 +486,12 @@ class IncidentService:
             "timestamp": inc_row["timestamp"],
             "summary": inc_row["summary"],
             "affectedUsersCount": inc_row["affected_users_count"],
+            "projectId": p_id,
+            "applicationId": a_id,
+            "environmentId": e_id,
+            "project_id": p_id,
+            "application_id": a_id,
+            "environment_id": e_id,
             "metrics": metrics,
             "mlAnalysis": {
                 "anomaly": anomaly_res,
@@ -217,4 +501,327 @@ class IncidentService:
             "evidenceTimeline": evidence_timeline,
             "rootCauseCandidates": root_causes,
             "recommendations": recommendations,
+            "githubCommits": github_commits,
+            "githubSourceEvidence": github_source_evidence.model_dump() if hasattr(github_source_evidence, "model_dump") else github_source_evidence,
+            "github_source_evidence": github_source_evidence.model_dump() if hasattr(github_source_evidence, "model_dump") else github_source_evidence,
+            "sentryEvidence": s_ev_dump,
+            "sentry_evidence": s_ev_dump,
+            "deployedCommit": deployed_commit,
+            "deployed_commit": deployed_commit,
+            "environmentName": environment_name,
+            "environment_name": environment_name,
         }
+
+    async def create_incident(self, payload: IncidentCreatePayload) -> Dict[str, Any]:
+        """
+        Ingest a real or developer-supplied incident, execute the full intelligence
+        pipeline (Feature Engineering -> Isolation Forest -> Random Forest -> Fuzzy Risk -> RCA),
+        persist to SQLite, and return the complete analyzed incident.
+        """
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        incident_id = payload.id.strip() if payload.id and payload.id.strip() else f"INC-{random.randint(1000, 9999)}"
+        timestamp = payload.timestamp or now_iso
+
+        if payload.metrics:
+            m = payload.metrics
+            error_rate = float(m.error_rate)
+            latency_p99 = float(m.latency_p99)
+            latency_p50 = float(m.latency_p50)
+            affected_users = int(m.affected_users)
+            request_volume = int(m.request_volume)
+            deployment_recency = int(m.deployment_recency_minutes)
+            cpu_utilization = float(m.cpu_utilization)
+            memory_utilization = float(m.memory_utilization)
+            service_criticality = int(m.service_criticality)
+        else:
+            error_rate = 2.5
+            latency_p99 = 240.0
+            latency_p50 = 60.0
+            affected_users = payload.affected_users_count or 0
+            request_volume = 1000
+            deployment_recency = 180
+            cpu_utilization = 35.0
+            memory_utilization = 40.0
+            service_criticality = 3
+
+        telemetry_payload = {
+            "error_rate": error_rate,
+            "latency_p99": latency_p99,
+            "latency_p50": latency_p50,
+            "affected_users": affected_users,
+            "cpu_utilization": cpu_utilization,
+            "memory_utilization": memory_utilization,
+            "deployment_recency_minutes": deployment_recency,
+            "request_volume": request_volume,
+            "service_criticality": service_criticality,
+        }
+
+        # 1. ML Anomaly Detection (Isolation Forest)
+        anomaly_res = self.anomaly_detector.predict(telemetry_payload)
+        anomaly_detected = 1 if anomaly_res.get("detected", False) else 0
+        anomaly_score = float(anomaly_res.get("score", 0.0))
+
+        # 2. ML Severity Classification (Random Forest)
+        severity_res = self.severity_classifier.predict(telemetry_payload)
+        predicted_severity = severity_res.get("predictedSeverity", "LOW")
+
+        # 3. Fuzzy Risk Assessment (Mamdani FIS with scikit-fuzzy)
+        fuzzy_inputs = {
+            "errorRate": error_rate,
+            "userImpact": min(int((affected_users / 5000.0) * 100), 100),
+            "latency": latency_p99,
+            "deploymentRecency": deployment_recency,
+            "serviceCriticality": service_criticality,
+        }
+        fuzzy_res = self.fuzzy_engine.evaluate(fuzzy_inputs)
+        risk_score = int(fuzzy_res.get("riskScore", 0))
+        risk_level = str(fuzzy_res.get("riskLevel", "LOW"))
+
+        # 4. Resolve topology associations early for commit and environment lookup
+        p_id = payload.project_id or payload.projectId
+        a_id = payload.application_id or payload.applicationId
+        e_id = payload.environment_id or payload.environmentId
+
+        if not a_id:
+            resolved_app = self.project_service.resolve_service_application(payload.service)
+            if resolved_app:
+                a_id = resolved_app["id"]
+                if not p_id:
+                    p_id = resolved_app["project_id"]
+
+        # Resolve deployment commit SHA with documented priority:
+        # 1. Incident payload commit_sha / commitSha
+        # 2. Explicit deployment payload commit_hash
+        # 3. Environment current_commit
+        incident_commit_sha = payload.commit_sha or payload.commitSha
+        env_current_commit = None
+        env_name = payload.environment or "production"
+        if e_id:
+            env_rec = self.project_service.get_environment_by_id(e_id)
+            if env_rec:
+                env_current_commit = env_rec.get("current_commit")
+                if env_rec.get("name"):
+                    env_name = env_rec["name"]
+
+        # 5. Process evidence collections
+        logs_list = []
+        if payload.logs:
+            for idx, l in enumerate(payload.logs):
+                logs_list.append({
+                    "id": f"LOG-{incident_id}-{idx+1}",
+                    "incident_id": incident_id,
+                    "timestamp": l.timestamp or timestamp,
+                    "log_level": l.log_level,
+                    "message": l.message,
+                    "stack_trace": l.stack_trace,
+                })
+
+        # Support real runtime telemetry error fields directly
+        if (payload.error_message or payload.stack_trace):
+            if not logs_list:
+                msg = payload.error_message or (f"Runtime error ({payload.error_type})" if payload.error_type else "Runtime error")
+                logs_list.append({
+                    "id": f"LOG-{incident_id}-1",
+                    "incident_id": incident_id,
+                    "timestamp": timestamp,
+                    "log_level": "ERROR",
+                    "message": msg,
+                    "stack_trace": payload.stack_trace,
+                })
+            elif payload.stack_trace and not any(item.get("stack_trace") for item in logs_list):
+                logs_list[0]["stack_trace"] = payload.stack_trace
+
+        deps_list = []
+        if payload.deployments:
+            for idx, d in enumerate(payload.deployments):
+                deps_list.append({
+                    "id": f"DEP-{incident_id}-{idx+1}",
+                    "service": payload.service,
+                    "commit_hash": d.commit_hash,
+                    "deployed_at": d.deployed_at or timestamp,
+                    "environment": d.environment,
+                    "status": d.status,
+                    "author": d.author,
+                    "changelog": d.changelog,
+                })
+
+        resolved_commit_sha = (
+            incident_commit_sha
+            or (deps_list[0].get("commit_hash") if deps_list else None)
+            or env_current_commit
+        )
+
+        # If a valid deployment commit was resolved but no deployments were supplied, synthesize deployment record
+        if resolved_commit_sha and not deps_list:
+            deps_list.append({
+                "id": f"DEP-{incident_id}-1",
+                "service": payload.service,
+                "commit_hash": resolved_commit_sha,
+                "deployed_at": timestamp,
+                "environment": env_name,
+                "status": "SUCCESS",
+                "author": "system/deployer",
+                "changelog": f"Deployed revision {resolved_commit_sha[:7]}",
+            })
+
+        tickets_list = []
+        if payload.tickets:
+            for idx, t in enumerate(payload.tickets):
+                tickets_list.append({
+                    "id": f"TCK-{incident_id}-{idx+1}",
+                    "incident_id": incident_id,
+                    "created_at": t.created_at or timestamp,
+                    "customer_tier": t.customer_tier,
+                    "subject": t.subject,
+                    "sentiment": t.sentiment,
+                })
+
+        events_list = []
+        if payload.events:
+            for idx, e in enumerate(payload.events):
+                events_list.append({
+                    "id": f"EVT-{incident_id}-{idx+1}",
+                    "incident_id": incident_id,
+                    "timestamp": e.timestamp or timestamp,
+                    "event_type": e.event_type,
+                    "service": e.service or payload.service,
+                    "description": e.description,
+                    "severity": e.severity,
+                })
+
+        # 6. Root Cause Analysis
+        metrics_dict = {
+            "service": payload.service,
+            "affectedUsers": affected_users,
+            "errorRate": error_rate,
+            "latencyP99": latency_p99,
+            "latencyP50": latency_p50,
+            "requestVolume": request_volume,
+            "deploymentRecencyMinutes": deployment_recency,
+            "cpuUtilization": cpu_utilization,
+            "memoryUtilization": memory_utilization,
+        }
+        temp_inc = {
+            "id": incident_id,
+            "service": payload.service,
+            "title": payload.title,
+            "severity": predicted_severity,
+        }
+
+        repo_owner = None
+        repo_name = None
+        default_branch = None
+        if a_id:
+            app_rec = self.project_service.get_application_by_id(a_id)
+            if app_rec and app_rec.get("repo_owner") and app_rec.get("repo_name"):
+                repo_owner = app_rec["repo_owner"]
+                repo_name = app_rec["repo_name"]
+                default_branch = app_rec.get("default_branch") or "main"
+
+        github_commits = await self._fetch_deployment_commits(
+            deps_list,
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            default_branch=default_branch,
+        )
+        sentry_evidence = await self.sentry_service.get_runtime_evidence(
+            service=payload.service,
+            environment=env_name,
+            release=resolved_commit_sha,
+        )
+        root_causes = self.root_cause_engine.analyze(
+            incident=temp_inc,
+            metrics=metrics_dict,
+            logs=logs_list,
+            deployments=deps_list,
+            tickets=tickets_list,
+            github_commits=github_commits,
+            sentry_evidence=sentry_evidence,
+        )
+        top_category = root_causes[0]["category"] if root_causes else "CODE_ERROR"
+
+        summary = payload.summary or f"{payload.title} impacting {payload.service}."
+        affected_users_count = payload.affected_users_count if payload.affected_users_count is not None else affected_users
+
+        # 6. Persist to SQLite
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Insert or replace incident record
+        cursor.execute("""
+        INSERT OR REPLACE INTO incidents (
+            id, title, service, severity, risk, risk_score,
+            anomaly_detected, anomaly_score, status, timestamp,
+            summary, affected_users_count, root_cause_category,
+            project_id, application_id, environment_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            incident_id,
+            payload.title,
+            payload.service,
+            predicted_severity,
+            risk_level,
+            risk_score,
+            anomaly_detected,
+            anomaly_score,
+            payload.status,
+            timestamp,
+            summary,
+            affected_users_count,
+            top_category,
+            p_id,
+            a_id,
+            e_id,
+        ))
+
+        # Insert or replace metrics record
+        cursor.execute("""
+        INSERT OR REPLACE INTO incident_metrics (
+            incident_id, service, affected_users, error_rate,
+            latency_p99, latency_p50, request_volume,
+            deployment_recency_minutes, cpu_utilization,
+            memory_utilization, service_criticality
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            incident_id,
+            payload.service,
+            affected_users,
+            error_rate,
+            latency_p99,
+            latency_p50,
+            request_volume,
+            deployment_recency,
+            cpu_utilization,
+            memory_utilization,
+            service_criticality,
+        ))
+
+        # Insert associated evidence
+        for log in logs_list:
+            cursor.execute("""
+            INSERT OR REPLACE INTO runtime_logs (id, incident_id, timestamp, log_level, message, stack_trace)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """, (log["id"], log["incident_id"], log["timestamp"], log["log_level"], log["message"], log["stack_trace"]))
+
+        for dep in deps_list:
+            cursor.execute("""
+            INSERT OR REPLACE INTO deployments (id, service, commit_hash, deployed_at, environment, status, author, changelog)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (dep["id"], dep["service"], dep["commit_hash"], dep["deployed_at"], dep["environment"], dep["status"], dep["author"], dep["changelog"]))
+
+        for tck in tickets_list:
+            cursor.execute("""
+            INSERT OR REPLACE INTO support_tickets (id, incident_id, created_at, customer_tier, subject, sentiment)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """, (tck["id"], tck["incident_id"], tck["created_at"], tck["customer_tier"], tck["subject"], tck["sentiment"]))
+
+        for evt in events_list:
+            cursor.execute("""
+            INSERT OR REPLACE INTO evidence_events (id, incident_id, timestamp, event_type, service, description, severity)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (evt["id"], evt["incident_id"], evt["timestamp"], evt["event_type"], evt["service"], evt["description"], evt["severity"]))
+
+        conn.commit()
+        conn.close()
+
+        return await self.get_incident_details(incident_id)

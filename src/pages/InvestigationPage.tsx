@@ -11,21 +11,27 @@ import { SeverityBadge } from '@/components/Common/SeverityBadge';
 import { RiskBadge } from '@/components/Common/RiskBadge';
 import { EvidenceTimeline } from '@/components/Incident/EvidenceTimeline';
 import { RootCauseList } from '@/components/Incident/RootCauseList';
+import { SentryEvidenceCard } from '@/components/Incident/SentryEvidenceCard';
 import { getIncidents, getIncidentById } from '@/api/incidents';
 import { Incident, IncidentDetails } from '@/types';
 
 export const InvestigationPage: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [selectedId, setSelectedId] = useState<string>('INC-8492');
+  const [selectedId, setSelectedId] = useState<string>('');
   const [incidentDetail, setIncidentDetail] = useState<IncidentDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadIncidents() {
+      setLoading(true);
       const res = await getIncidents();
       setIncidents(res.data);
-      if (res.data.length > 0 && !res.data.some((i) => i.id === selectedId)) {
+      if (res.data.length > 0) {
         setSelectedId(res.data[0].id);
+      } else {
+        setSelectedId('');
+        setIncidentDetail(null);
+        setLoading(false);
       }
     }
     loadIncidents();
@@ -33,7 +39,11 @@ export const InvestigationPage: React.FC = () => {
 
   useEffect(() => {
     async function loadDetail() {
-      if (!selectedId) return;
+      if (!selectedId) {
+        setIncidentDetail(null);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       const res = await getIncidentById(selectedId);
       setIncidentDetail(res.data);
@@ -60,20 +70,38 @@ export const InvestigationPage: React.FC = () => {
           <select
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
-            className="bg-slate-950 border border-slate-700 rounded-md px-3 py-1.5 text-xs font-mono text-teal-300 font-semibold focus:outline-none focus:border-teal-500"
+            disabled={incidents.length === 0}
+            className="bg-slate-950 border border-slate-700 rounded-md px-3 py-1.5 text-xs font-mono text-teal-300 font-semibold focus:outline-none focus:border-teal-500 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
-            {incidents.map((inc) => (
-              <option key={inc.id} value={inc.id}>
-                {inc.id} — {inc.service} ({inc.severity})
-              </option>
-            ))}
+            {incidents.length === 0 ? (
+              <option value="">No incidents available</option>
+            ) : (
+              incidents.map((inc) => (
+                <option key={inc.id} value={inc.id}>
+                  {inc.id} — {inc.service} ({inc.severity})
+                </option>
+              ))
+            )}
           </select>
         </div>
       </div>
 
       {loading ? (
         <div className="py-16 text-center font-mono text-xs text-slate-400">
-          Correlating operational signals and causal evidence for {selectedId}...
+          Correlating operational signals and causal evidence for {selectedId || 'incident'}...
+        </div>
+      ) : incidents.length === 0 ? (
+        <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-12 text-center max-w-xl mx-auto space-y-4 my-8">
+          <div className="w-12 h-12 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center mx-auto text-slate-400">
+            <Layers className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold text-slate-200">No Incidents Available for Investigation</h3>
+            <p className="text-xs text-slate-400 leading-relaxed font-sans">
+              The system database is currently operating in real-data mode with no incidents recorded.
+              Ingest telemetry or submit an incident via <code className="text-teal-400 font-mono">POST /api/incidents</code> to inspect causal inference, timeline events, and automated root cause analysis.
+            </p>
+          </div>
         </div>
       ) : incidentDetail && (
         <>
@@ -97,6 +125,35 @@ export const InvestigationPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Automated Fuzzy Risk Assessment */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-mono">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xs font-semibold text-slate-100 uppercase tracking-wider">
+                  Fuzzy Risk Assessment
+                </span>
+                <span className="text-slate-600">&bull;</span>
+                <span className="text-xs text-slate-300">
+                  Risk Score:{' '}
+                  <span className="text-rose-400 font-bold">
+                    {incidentDetail.riskScore}
+                  </span>
+                </span>
+                <span className="text-slate-600">&bull;</span>
+                <span className="text-xs text-slate-300 flex items-center gap-1.5">
+                  Risk Level:
+                  <RiskBadge risk={incidentDetail.risk} />
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-sans leading-relaxed">
+                Calculated automatically from incident telemetry using the Mamdani fuzzy inference engine.
+              </p>
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono shrink-0 bg-slate-950/80 px-2.5 py-1 rounded border border-slate-800">
+              Mamdani FIS &bull; Centroid Defuzzification &bull; Read-Only
+            </div>
+          </div>
+
           {/* VISUAL CAUSAL PIPELINE:
               Operational Signals -> Evidence Correlation -> Root Cause Candidates */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 space-y-4">
@@ -116,25 +173,61 @@ export const InvestigationPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div className="bg-slate-950/80 border border-slate-800 rounded p-3 flex items-start gap-2.5">
                 <GitCommit className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                <div>
+                <div className="min-w-0 flex-1">
                   <span className="text-xs font-mono font-semibold text-slate-200 block">
                     Deployment Events
                   </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    CI/CD commits, image hashes, config drift
-                  </p>
+                  {incidentDetail.githubCommits && incidentDetail.githubCommits.length > 0 ? (
+                    <div className="mt-1 space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                        <span className="text-cyan-400 font-semibold">
+                          {incidentDetail.githubCommits[0].short_sha || incidentDetail.githubCommits[0].sha.slice(0, 7)}
+                        </span>
+                        <span className="text-slate-400 truncate">
+                          by {incidentDetail.githubCommits[0].author.name}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 truncate" title={incidentDetail.githubCommits[0].message}>
+                        {incidentDetail.githubCommits[0].message.split('\n')[0]}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      CI/CD commits, image hashes, config drift
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="bg-slate-950/80 border border-slate-800 rounded p-3 flex items-start gap-2.5">
                 <AlertOctagon className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-xs font-mono font-semibold text-slate-200 block">
-                    Runtime Errors
-                  </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    HTTP 5xx spikes, exception stack traces
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-mono font-semibold text-slate-200 block">
+                      Runtime Errors
+                    </span>
+                    {incidentDetail.sentryEvidence && incidentDetail.sentryEvidence.status === 'CONNECTED' && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                        Sentry Active
+                      </span>
+                    )}
+                  </div>
+                  {incidentDetail.sentryEvidence && incidentDetail.sentryEvidence.status === 'CONNECTED' ? (
+                    <div className="mt-1 space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                        <span className="text-rose-400 font-semibold truncate">
+                          {incidentDetail.sentryEvidence.matched_exception_type || `${incidentDetail.sentryEvidence.issue_count} issue(s)`}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 truncate" title={incidentDetail.sentryEvidence.message}>
+                        {incidentDetail.sentryEvidence.message}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      HTTP 5xx spikes, exception stack traces
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -225,6 +318,14 @@ export const InvestigationPage: React.FC = () => {
               ))}
             </div>
           </div>
+
+          {/* Sentry Runtime Error Evidence */}
+          {incidentDetail.sentryEvidence && (
+            <SentryEvidenceCard
+              evidence={incidentDetail.sentryEvidence}
+              rootCauseCandidates={incidentDetail.rootCauseCandidates}
+            />
+          )}
 
           {/* Side by side: Timeline and Root Cause Candidates */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
