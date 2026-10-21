@@ -36,7 +36,7 @@ export async function getIncidents(filters?: IncidentFilters): Promise<{ data: I
  */
 export async function getIncidentById(id: string): Promise<{ data: IncidentDetails | null; isDemo: boolean }> {
   try {
-    const incident = await apiClient<IncidentDetails>(`/api/incidents/${id}`);
+    const incident = await apiClient<IncidentDetails>(`/api/incidents/${id}`, { timeoutMs: 30000 });
     return { data: incident, isDemo: false };
   } catch (err) {
     console.warn(`Failed to fetch incident ${id}:`, err);

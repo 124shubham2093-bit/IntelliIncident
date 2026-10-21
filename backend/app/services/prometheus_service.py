@@ -7,6 +7,7 @@ STRICTLY READ-ONLY: Never modifies Prometheus configuration or alert rules.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
+import asyncio
 import datetime
 import math
 import httpx
@@ -88,7 +89,7 @@ class PrometheusService:
             "User-Agent": "IntelliIncident-PrometheusIntegration/1.0",
         }
 
-    async def get_health(self) -> PrometheusStatusResponse:
+    async def get_health(self, client: Optional[httpx.AsyncClient] = None) -> PrometheusStatusResponse:
         """
         Check reachability and connectivity to Prometheus HTTP API.
         Safe method that never raises unhandled exceptions.
@@ -104,8 +105,9 @@ class PrometheusService:
 
         endpoint = f"{self.base_url}/api/v1/status/buildinfo"
         try:
-            if self._client:
-                resp = await self._client.get(endpoint, headers=self._get_headers(), timeout=self.timeout)
+            http_client = client or self._client
+            if http_client:
+                resp = await http_client.get(endpoint, headers=self._get_headers(), timeout=self.timeout)
             else:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     resp = await client.get(endpoint, headers=self._get_headers())
@@ -145,7 +147,9 @@ class PrometheusService:
                 message=f"Error connecting to Prometheus: {str(e)[:100]}",
             )
 
-    async def query_instant(self, query: str, time: Optional[float] = None) -> Optional[float]:
+    async def query_instant(
+        self, query: str, time: Optional[float] = None, client: Optional[httpx.AsyncClient] = None
+    ) -> Optional[float]:
         """
         Execute an instant vector query against GET /api/v1/query.
         Returns the scalar float value if present and finite, or None.
@@ -159,8 +163,9 @@ class PrometheusService:
             params["time"] = f"{time:.3f}"
 
         try:
-            if self._client:
-                resp = await self._client.get(endpoint, params=params, headers=self._get_headers(), timeout=self.timeout)
+            http_client = client or self._client
+            if http_client:
+                resp = await http_client.get(endpoint, params=params, headers=self._get_headers(), timeout=self.timeout)
             else:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     resp = await client.get(endpoint, params=params, headers=self._get_headers())
@@ -195,7 +200,7 @@ class PrometheusService:
             return None
 
     async def query_range(
-        self, query: str, start: float, end: float, step: int = 60
+        self, query: str, start: float, end: float, step: int = 60, client: Optional[httpx.AsyncClient] = None
     ) -> List[PrometheusSeriesPoint]:
         """
         Execute a range query against GET /api/v1/query_range.
@@ -213,8 +218,9 @@ class PrometheusService:
         }
 
         try:
-            if self._client:
-                resp = await self._client.get(endpoint, params=params, headers=self._get_headers(), timeout=self.timeout)
+            http_client = client or self._client
+            if http_client:
+                resp = await http_client.get(endpoint, params=params, headers=self._get_headers(), timeout=self.timeout)
             else:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     resp = await client.get(endpoint, params=params, headers=self._get_headers())
@@ -379,128 +385,150 @@ class PrometheusService:
         Returns a complete, typed PrometheusEvidence object.
         Gracefully handles missing or unreachable Prometheus without throwing.
         """
-        health = await self.get_health()
-        if not health.reachable:
-            return PrometheusEvidence(
-                status=health.status,
-                url=self.base_url,
-                service=service,
-                time_window=None,
-                metrics={},
-                anomalies_detected=0,
-                highest_correlation="NONE",
-                summary=f"Prometheus is {health.status.lower()}: {health.message}",
-            )
+        http_client = self._client
+        owns_client = False
+        if not http_client:
+            http_client = httpx.AsyncClient(timeout=self.timeout)
+            owns_client = True
 
-        tw, b_start, b_end, i_start, i_end = self.derive_time_window(incident_timestamp)
+        try:
+            health = await self.get_health(client=http_client)
+            if not health.reachable:
+                return PrometheusEvidence(
+                    status=health.status,
+                    url=self.base_url,
+                    service=service,
+                    time_window=None,
+                    metrics={},
+                    anomalies_detected=0,
+                    highest_correlation="NONE",
+                    summary=f"Prometheus is {health.status.lower()}: {health.message}",
+                )
 
-        # Baseline evaluation midpoint and Incident window evaluation midpoint
-        b_mid = (b_start + b_end) / 2.0
-        i_mid = (i_start + i_end) / 2.0
+            tw, b_start, b_end, i_start, i_end = self.derive_time_window(incident_timestamp)
 
-        samples: Dict[str, PrometheusMetricSample] = {}
-        anomalies_count = 0
-        correlation_rank = {"NONE": 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3}
-        max_rank = 0
+            # Baseline evaluation midpoint and Incident window evaluation midpoint
+            b_mid = (b_start + b_end) / 2.0
+            i_mid = (i_start + i_end) / 2.0
 
-        for key, conf in self.queries.items():
-            primary_q = conf["primary"].replace("{service}", service)
-            fallback_q = conf.get("fallback", "").replace("{service}", service)
-            unit = conf.get("unit", "")
+            correlation_rank = {"NONE": 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3}
 
-            # Query baseline value
-            b_val = await self.query_instant(primary_q, time=b_mid)
-            active_q = primary_q
-            if b_val is None and fallback_q:
-                b_val = await self.query_instant(fallback_q, time=b_mid)
-                if b_val is not None:
-                    active_q = fallback_q
+            async def _evaluate_single_metric(key: str, conf: Dict[str, str]) -> Tuple[str, PrometheusMetricSample]:
+                primary_q = conf["primary"].replace("{service}", service)
+                fallback_q = conf.get("fallback", "").replace("{service}", service)
+                unit = conf.get("unit", "")
 
-            # Query incident value
-            i_val = await self.query_instant(active_q, time=i_mid)
-            if i_val is None and active_q != primary_q:
-                i_val = await self.query_instant(primary_q, time=i_mid)
-                if i_val is not None:
-                    active_q = primary_q
+                # Query baseline value
+                b_val = await self.query_instant(primary_q, time=b_mid, client=http_client)
+                active_q = primary_q
+                if b_val is None and fallback_q:
+                    b_val = await self.query_instant(fallback_q, time=b_mid, client=http_client)
+                    if b_val is not None:
+                        active_q = fallback_q
 
-            # Query series points across [b_start, i_end]
-            series_pts = await self.query_range(active_q, start=b_start, end=i_end, step=120)
+                # Query incident value
+                i_val = await self.query_instant(active_q, time=i_mid, client=http_client)
+                if i_val is None and active_q != primary_q:
+                    i_val = await self.query_instant(primary_q, time=i_mid, client=http_client)
+                    if i_val is not None:
+                        active_q = primary_q
 
-            # Fallback to computing baseline and incident values from range points if instant query returned None
-            if b_val is None and series_pts:
-                b_pts = [p.value for p in series_pts if b_start <= p.timestamp <= b_end]
-                if b_pts:
-                    b_val = round(sum(b_pts) / len(b_pts), 2)
-            if i_val is None and series_pts:
-                i_pts = [p.value for p in series_pts if i_start <= p.timestamp <= i_end]
-                if i_pts:
-                    i_val = round(sum(i_pts) / len(i_pts), 2)
+                # Query series points across [b_start, i_end]
+                series_pts = await self.query_range(active_q, start=b_start, end=i_end, step=120, client=http_client)
 
-            if b_val is None and i_val is None and not series_pts:
-                samples[key] = PrometheusMetricSample(
+                # Fallback to computing baseline and incident values from range points if instant query returned None
+                if b_val is None and series_pts:
+                    b_pts = [p.value for p in series_pts if b_start <= p.timestamp <= b_end]
+                    if b_pts:
+                        b_val = round(sum(b_pts) / len(b_pts), 2)
+                if i_val is None and series_pts:
+                    i_pts = [p.value for p in series_pts if i_start <= p.timestamp <= i_end]
+                    if i_pts:
+                        i_val = round(sum(i_pts) / len(i_pts), 2)
+
+                if b_val is None and i_val is None and not series_pts:
+                    sample = PrometheusMetricSample(
+                        metric_name=key,
+                        query=active_q,
+                        unit=unit,
+                        baseline_value=None,
+                        observed_value=None,
+                        deviation_pct=None,
+                        anomaly_detected=False,
+                        correlation_strength="NONE",
+                        status="NOT_FOUND",
+                        message=f"No data returned for metric '{key}' on service '{service}'.",
+                        series=[],
+                    )
+                    return key, sample
+
+                anomaly, dev_pct, strength = self.analyze_metric_deviation(b_val, i_val, key)
+                sample = PrometheusMetricSample(
                     metric_name=key,
                     query=active_q,
                     unit=unit,
-                    baseline_value=None,
-                    observed_value=None,
-                    deviation_pct=None,
-                    anomaly_detected=False,
-                    correlation_strength="NONE",
-                    status="NOT_FOUND",
-                    message=f"No data returned for metric '{key}' on service '{service}'.",
-                    series=[],
+                    baseline_value=round(b_val, 2) if b_val is not None else None,
+                    observed_value=round(i_val, 2) if i_val is not None else None,
+                    deviation_pct=dev_pct,
+                    anomaly_detected=anomaly,
+                    correlation_strength=strength,  # type: ignore
+                    status="AVAILABLE",
+                    message=None,
+                    series=series_pts[:40],
                 )
-                continue
+                return key, sample
 
-            anomaly, dev_pct, strength = self.analyze_metric_deviation(b_val, i_val, key)
-            if anomaly:
-                anomalies_count += 1
-            if correlation_rank.get(strength, 0) > max_rank:
-                max_rank = correlation_rank[strength]
+            # Run independent metric evidence evaluations concurrently
+            eval_tasks = [
+                _evaluate_single_metric(key, conf)
+                for key, conf in self.queries.items()
+            ]
+            evaluated_metrics = await asyncio.gather(*eval_tasks)
 
-            samples[key] = PrometheusMetricSample(
-                metric_name=key,
-                query=active_q,
-                unit=unit,
-                baseline_value=round(b_val, 2) if b_val is not None else None,
-                observed_value=round(i_val, 2) if i_val is not None else None,
-                deviation_pct=dev_pct,
-                anomaly_detected=anomaly,
-                correlation_strength=strength,  # type: ignore
-                status="AVAILABLE",
-                message=None,
-                series=series_pts[:40],
+            samples: Dict[str, PrometheusMetricSample] = {}
+            anomalies_count = 0
+            max_rank = 0
+
+            for key, sample in evaluated_metrics:
+                samples[key] = sample
+                if sample.anomaly_detected:
+                    anomalies_count += 1
+                strength = sample.correlation_strength
+                if correlation_rank.get(strength, 0) > max_rank:
+                    max_rank = correlation_rank[strength]
+
+            highest_strength = [k for k, v in correlation_rank.items() if v == max_rank][0]
+            status = "CONNECTED" if any(s.status == "AVAILABLE" for s in samples.values()) else "NO_METRICS_FOUND"
+
+            # Build informative factual summary
+            if anomalies_count > 0:
+                deviant_names = [s.metric_name for s in samples.values() if s.anomaly_detected]
+                summary = (
+                    f"Prometheus detected {anomalies_count} anomalous metric deviation(s) "
+                    f"({', '.join(deviant_names)}) for '{service}' during the incident window "
+                    f"with {highest_strength.lower()} operational correlation."
+                )
+            elif status == "CONNECTED":
+                summary = f"Prometheus connected. Metric telemetry across {len(samples)} indicators is within baseline variance."
+            else:
+                summary = f"Prometheus connected at {self.base_url}, but no metric series matched service '{service}'."
+
+            return PrometheusEvidence(
+                status=status,
+                url=self.base_url,
+                service=service,
+                time_window=tw,
+                cpu_utilization=samples.get("cpu_utilization"),
+                memory_utilization=samples.get("memory_utilization"),
+                request_rate=samples.get("request_rate"),
+                error_rate=samples.get("error_rate"),
+                p95_latency=samples.get("p95_latency"),
+                availability=samples.get("availability"),
+                metrics=samples,
+                anomalies_detected=anomalies_count,
+                highest_correlation=highest_strength,  # type: ignore
+                summary=summary,
             )
-
-        highest_strength = [k for k, v in correlation_rank.items() if v == max_rank][0]
-        status = "CONNECTED" if any(s.status == "AVAILABLE" for s in samples.values()) else "NO_METRICS_FOUND"
-
-        # Build informative factual summary
-        if anomalies_count > 0:
-            deviant_names = [s.metric_name for s in samples.values() if s.anomaly_detected]
-            summary = (
-                f"Prometheus detected {anomalies_count} anomalous metric deviation(s) "
-                f"({', '.join(deviant_names)}) for '{service}' during the incident window "
-                f"with {highest_strength.lower()} operational correlation."
-            )
-        elif status == "CONNECTED":
-            summary = f"Prometheus connected. Metric telemetry across {len(samples)} indicators is within baseline variance."
-        else:
-            summary = f"Prometheus connected at {self.base_url}, but no metric series matched service '{service}'."
-
-        return PrometheusEvidence(
-            status=status,
-            url=self.base_url,
-            service=service,
-            time_window=tw,
-            cpu_utilization=samples.get("cpu_utilization"),
-            memory_utilization=samples.get("memory_utilization"),
-            request_rate=samples.get("request_rate"),
-            error_rate=samples.get("error_rate"),
-            p95_latency=samples.get("p95_latency"),
-            availability=samples.get("availability"),
-            metrics=samples,
-            anomalies_detected=anomalies_count,
-            highest_correlation=highest_strength,  # type: ignore
-            summary=summary,
-        )
+        finally:
+            if owns_client:
+                await http_client.aclose()
