@@ -15,7 +15,7 @@ export async function getIncidentReport(
   incidentId: string
 ): Promise<{ data: IncidentReportResponse | null; isDemo: boolean }> {
   try {
-    const report = await apiClient<IncidentReportResponse>(`/api/reports/${incidentId}`);
+    const report = await apiClient<IncidentReportResponse>(`/api/reports/${incidentId}`, { timeoutMs: 30000 });
     return { data: report, isDemo: false };
   } catch (err) {
     console.warn(`Report fetch failed for ${incidentId}:`, err);
