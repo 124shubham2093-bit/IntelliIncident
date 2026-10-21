@@ -19,6 +19,7 @@ import { RootCauseList } from '@/components/Incident/RootCauseList';
 import { RecommendationsList } from '@/components/Incident/RecommendationsList';
 import { GitHubCommitCard } from '@/components/Incident/GitHubCommitCard';
 import { SentryEvidenceCard } from '@/components/Incident/SentryEvidenceCard';
+import { PrometheusEvidenceCard } from '@/components/Incident/PrometheusEvidenceCard';
 import { getIncidentById } from '@/api/incidents';
 import { IncidentDetails } from '@/types';
 
@@ -350,6 +351,14 @@ export const IncidentDetailsPage: React.FC = () => {
       {incident.sentryEvidence && (
         <SentryEvidenceCard
           evidence={incident.sentryEvidence}
+          rootCauseCandidates={incident.rootCauseCandidates}
+        />
+      )}
+
+      {/* Prometheus Metric Telemetry Evidence */}
+      {(incident.prometheusEvidence || incident.prometheus_evidence) && (
+        <PrometheusEvidenceCard
+          evidence={(incident.prometheusEvidence || incident.prometheus_evidence)!}
           rootCauseCandidates={incident.rootCauseCandidates}
         />
       )}

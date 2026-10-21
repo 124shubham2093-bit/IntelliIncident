@@ -138,6 +138,8 @@ export interface IncidentDetails extends Incident {
   deployedCommit?: string | null;
   environmentName?: string | null;
   sentryEvidence?: SentryEvidence | null;
+  prometheusEvidence?: PrometheusEvidence | null;
+  prometheus_evidence?: PrometheusEvidence | null;
 }
 
 // GitHub Code Intelligence Types
@@ -362,7 +364,61 @@ export interface SentryEvidence {
   message: string;
 }
 
+// ==========================================
+// Prometheus Metric Telemetry Types
+// ==========================================
 
+export interface PrometheusStatus {
+  status: 'CONNECTED' | 'NOT_CONFIGURED' | 'UNAVAILABLE' | 'ERROR';
+  url: string;
+  reachable: boolean;
+  version?: string | null;
+  message: string;
+}
+
+export interface PrometheusSeriesPoint {
+  timestamp: number;
+  value: number;
+}
+
+export interface PrometheusTimeWindow {
+  incident_time: string;
+  baseline_start: string;
+  baseline_end: string;
+  incident_start: string;
+  incident_end: string;
+}
+
+export interface PrometheusMetricSample {
+  metric_name: string;
+  query: string;
+  unit: string;
+  baseline_value?: number | null;
+  observed_value?: number | null;
+  deviation_pct?: number | null;
+  anomaly_detected: boolean;
+  correlation_strength: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
+  status: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_FOUND';
+  message?: string | null;
+  series?: PrometheusSeriesPoint[];
+}
+
+export interface PrometheusEvidence {
+  status: string; // "CONNECTED" | "NOT_CONFIGURED" | "UNAVAILABLE" | "NO_METRICS_FOUND" | "ERROR"
+  url: string;
+  service?: string | null;
+  time_window?: PrometheusTimeWindow | null;
+  cpu_utilization?: PrometheusMetricSample | null;
+  memory_utilization?: PrometheusMetricSample | null;
+  request_rate?: PrometheusMetricSample | null;
+  error_rate?: PrometheusMetricSample | null;
+  p95_latency?: PrometheusMetricSample | null;
+  availability?: PrometheusMetricSample | null;
+  metrics?: Record<string, PrometheusMetricSample>;
+  anomalies_detected: number;
+  highest_correlation: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
+  summary: string;
+}
 
 export interface ServiceHealth {
   service: string;
