@@ -286,3 +286,73 @@ async def test_get_incident_metric_evidence_correlated():
     assert evidence.cpu_utilization is not None
     assert evidence.cpu_utilization.anomaly_detected is True
     assert evidence.highest_correlation in ("HIGH", "MEDIUM")
+
+
+@pytest.mark.anyio
+async def test_get_incident_metric_evidence_reuses_single_client():
+    """Verify that get_incident_metric_evidence instantiates and closes a single client when not injected."""
+    mock_resp = MagicMock(
+        status_code=200,
+        json=lambda: {
+            "status": "success",
+            "data": {
+                "version": "3.15.0",
+                "resultType": "vector",
+                "result": [{"metric": {}, "value": [1700000000.0, "25.0"]}],
+            }
+        }
+    )
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get, \
+         patch("httpx.AsyncClient.aclose", new_callable=AsyncMock) as mock_close:
+        mock_get.return_value = mock_resp
+        service = PrometheusService(url="http://prom.pooled:9090")
+        evidence = await service.get_incident_metric_evidence(
+            service="PaymentGateway",
+            incident_timestamp="2026-10-21T13:00:00Z"
+        )
+        assert evidence.status == "CONNECTED"
+        assert evidence.service == "PaymentGateway"
+        # Should have closed the owned client exactly once
+        assert mock_close.await_count == 1
+        # Multiple queries executed using the shared client
+        assert mock_get.call_count >= 6
+
+
+@pytest.mark.anyio
+async def test_query_helpers_support_explicit_client():
+    """Verify that get_health, query_instant, and query_range accept and prioritize explicit client argument."""
+    mock_resp = MagicMock(
+        status_code=200,
+        json=lambda: {
+            "status": "success",
+            "data": {
+                "version": "3.15.0",
+                "resultType": "vector",
+                "result": [{"metric": {}, "value": [1700000000.0, "42.0"]}],
+            }
+        }
+    )
+    explicit_client = AsyncMock()
+    explicit_client.get = AsyncMock(return_value=mock_resp)
+
+    service = PrometheusService(url="http://prom.explicit:9090")
+    health = await service.get_health(client=explicit_client)
+    assert health.reachable is True
+
+    val = await service.query_instant("up", client=explicit_client)
+    assert val == 42.0
+
+    mock_range_resp = MagicMock(
+        status_code=200,
+        json=lambda: {
+            "status": "success",
+            "data": {
+                "result": [{"values": [[1700000000, "10.0"], [1700000060, "20.0"]]}]
+            }
+        }
+    )
+    explicit_client.get = AsyncMock(return_value=mock_range_resp)
+    pts = await service.query_range("up", start=1700000000, end=1700000060, client=explicit_client)
+    assert len(pts) == 2
+    assert pts[0].value == 10.0
