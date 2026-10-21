@@ -3,6 +3,7 @@ Incident Data Access Service for IntelliIncident
 Handles incident queries, filtering, and detailed record assembly from SQLite.
 """
 
+import asyncio
 import datetime
 import uuid
 import random
@@ -443,23 +444,23 @@ class IncidentService:
             default_branch=default_branch,
         )
 
-        sentry_evidence = await self.sentry_service.get_runtime_evidence(
-            service=inc_row["service"],
-            environment=environment_name,
-            release=deployed_commit,
-        )
-
-        prometheus_evidence = await self.prometheus_service.get_incident_metric_evidence(
-            service=inc_row["service"],
-            incident_timestamp=inc_row["timestamp"],
-        )
-
-        jira_evidence = await self.jira_service.get_incident_jira_evidence(
-            service=inc_row["service"],
-            incident_id=incident_id,
-            title=inc_row["title"],
-            incident_timestamp=inc_row["timestamp"],
-            environment=environment_name,
+        sentry_evidence, prometheus_evidence, jira_evidence = await asyncio.gather(
+            self.sentry_service.get_runtime_evidence(
+                service=inc_row["service"],
+                environment=environment_name,
+                release=deployed_commit,
+            ),
+            self.prometheus_service.get_incident_metric_evidence(
+                service=inc_row["service"],
+                incident_timestamp=inc_row["timestamp"],
+            ),
+            self.jira_service.get_incident_jira_evidence(
+                service=inc_row["service"],
+                incident_id=incident_id,
+                title=inc_row["title"],
+                incident_timestamp=inc_row["timestamp"],
+                environment=environment_name,
+            ),
         )
 
         root_causes = self.root_cause_engine.analyze(
@@ -751,21 +752,23 @@ class IncidentService:
             repo_name=repo_name,
             default_branch=default_branch,
         )
-        sentry_evidence = await self.sentry_service.get_runtime_evidence(
-            service=payload.service,
-            environment=env_name,
-            release=resolved_commit_sha,
-        )
-        prometheus_evidence = await self.prometheus_service.get_incident_metric_evidence(
-            service=payload.service,
-            incident_timestamp=timestamp,
-        )
-        jira_evidence = await self.jira_service.get_incident_jira_evidence(
-            service=payload.service,
-            incident_id=incident_id,
-            title=payload.title,
-            incident_timestamp=timestamp,
-            environment=env_name,
+        sentry_evidence, prometheus_evidence, jira_evidence = await asyncio.gather(
+            self.sentry_service.get_runtime_evidence(
+                service=payload.service,
+                environment=env_name,
+                release=resolved_commit_sha,
+            ),
+            self.prometheus_service.get_incident_metric_evidence(
+                service=payload.service,
+                incident_timestamp=timestamp,
+            ),
+            self.jira_service.get_incident_jira_evidence(
+                service=payload.service,
+                incident_id=incident_id,
+                title=payload.title,
+                incident_timestamp=timestamp,
+                environment=env_name,
+            ),
         )
         root_causes = self.root_cause_engine.analyze(
             incident=temp_inc,
