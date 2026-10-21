@@ -16,10 +16,12 @@ from backend.app.rca.root_cause_engine import RootCauseEngine
 from backend.app.services.recommendation_service import RecommendationService
 from backend.app.services.github_service import GitHubService
 from backend.app.services.sentry_service import SentryService
+from backend.app.services.prometheus_service import PrometheusService
 from backend.app.services.project_service import ProjectService
 from backend.app.schemas.incident import IncidentCreatePayload
 from backend.app.schemas.github import GitHubSourceEvidence, GitHubSourceLocation, GitHubSourceLine
 from backend.app.schemas.sentry import SentryEvidence
+from backend.app.schemas.prometheus import PrometheusEvidence
 from backend.app.services.stack_trace_parser import parse_stack_trace
 
 HEX_COMMIT_REGEX = re.compile(r"^[0-9a-fA-F]{7,40}$")
@@ -33,6 +35,7 @@ class IncidentService:
         self.root_cause_engine = RootCauseEngine()
         self.github_service = GitHubService()
         self.sentry_service = SentryService()
+        self.prometheus_service = PrometheusService()
         self.project_service = ProjectService()
 
     @staticmethod
@@ -443,6 +446,11 @@ class IncidentService:
             release=deployed_commit,
         )
 
+        prometheus_evidence = await self.prometheus_service.get_incident_metric_evidence(
+            service=inc_row["service"],
+            incident_timestamp=inc_row["timestamp"],
+        )
+
         root_causes = self.root_cause_engine.analyze(
             incident=incident_dict,
             metrics=metrics,
@@ -451,6 +459,7 @@ class IncidentService:
             tickets=tickets_list,
             github_commits=github_commits,
             sentry_evidence=sentry_evidence,
+            prometheus_evidence=prometheus_evidence,
         )
 
         # Recommendations based on top candidate
@@ -472,6 +481,7 @@ class IncidentService:
         )
 
         s_ev_dump = sentry_evidence.model_dump() if hasattr(sentry_evidence, "model_dump") else sentry_evidence
+        p_ev_dump = prometheus_evidence.model_dump() if hasattr(prometheus_evidence, "model_dump") else prometheus_evidence
 
         return {
             "id": inc_row["id"],
@@ -506,6 +516,8 @@ class IncidentService:
             "github_source_evidence": github_source_evidence.model_dump() if hasattr(github_source_evidence, "model_dump") else github_source_evidence,
             "sentryEvidence": s_ev_dump,
             "sentry_evidence": s_ev_dump,
+            "prometheusEvidence": p_ev_dump,
+            "prometheus_evidence": p_ev_dump,
             "deployedCommit": deployed_commit,
             "deployed_commit": deployed_commit,
             "environmentName": environment_name,
@@ -729,6 +741,10 @@ class IncidentService:
             environment=env_name,
             release=resolved_commit_sha,
         )
+        prometheus_evidence = await self.prometheus_service.get_incident_metric_evidence(
+            service=payload.service,
+            incident_timestamp=timestamp,
+        )
         root_causes = self.root_cause_engine.analyze(
             incident=temp_inc,
             metrics=metrics_dict,
@@ -737,6 +753,7 @@ class IncidentService:
             tickets=tickets_list,
             github_commits=github_commits,
             sentry_evidence=sentry_evidence,
+            prometheus_evidence=prometheus_evidence,
         )
         top_category = root_causes[0]["category"] if root_causes else "CODE_ERROR"
 

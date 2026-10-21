@@ -12,6 +12,7 @@ import { RiskBadge } from '@/components/Common/RiskBadge';
 import { EvidenceTimeline } from '@/components/Incident/EvidenceTimeline';
 import { RootCauseList } from '@/components/Incident/RootCauseList';
 import { SentryEvidenceCard } from '@/components/Incident/SentryEvidenceCard';
+import { PrometheusEvidenceCard } from '@/components/Incident/PrometheusEvidenceCard';
 import { getIncidents, getIncidentById } from '@/api/incidents';
 import { Incident, IncidentDetails } from '@/types';
 
@@ -233,13 +234,37 @@ export const InvestigationPage: React.FC = () => {
 
               <div className="bg-slate-950/80 border border-slate-800 rounded p-3 flex items-start gap-2.5">
                 <BellRing className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-xs font-mono font-semibold text-slate-200 block">
-                    Monitoring Signals
-                  </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    P99 latency shifts, connection pools, CPU
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-mono font-semibold text-slate-200 block">
+                      Monitoring Signals
+                    </span>
+                    {(incidentDetail.prometheusEvidence || incidentDetail.prometheus_evidence)?.status === 'CONNECTED' && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                        Prometheus Active
+                      </span>
+                    )}
+                  </div>
+                  {(incidentDetail.prometheusEvidence || incidentDetail.prometheus_evidence) ? (
+                    <div className="mt-1 space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                        <span className="text-amber-400 font-semibold truncate">
+                          {(incidentDetail.prometheusEvidence || incidentDetail.prometheus_evidence)!.anomalies_detected} Metric Anomalies
+                        </span>
+                        <span className="text-slate-500">·</span>
+                        <span className="text-slate-400 truncate">
+                          Peak: {(incidentDetail.prometheusEvidence || incidentDetail.prometheus_evidence)!.highest_correlation}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 truncate" title={(incidentDetail.prometheusEvidence || incidentDetail.prometheus_evidence)!.summary}>
+                        {(incidentDetail.prometheusEvidence || incidentDetail.prometheus_evidence)!.summary}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      P99 latency shifts, connection pools, CPU
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -323,6 +348,14 @@ export const InvestigationPage: React.FC = () => {
           {incidentDetail.sentryEvidence && (
             <SentryEvidenceCard
               evidence={incidentDetail.sentryEvidence}
+              rootCauseCandidates={incidentDetail.rootCauseCandidates}
+            />
+          )}
+
+          {/* Prometheus Metric Telemetry Evidence */}
+          {(incidentDetail.prometheusEvidence || incidentDetail.prometheus_evidence) && (
+            <PrometheusEvidenceCard
+              evidence={(incidentDetail.prometheusEvidence || incidentDetail.prometheus_evidence)!}
               rootCauseCandidates={incidentDetail.rootCauseCandidates}
             />
           )}

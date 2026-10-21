@@ -6,6 +6,7 @@ from backend.app.schemas.fuzzy import FuzzyRiskResult
 from backend.app.schemas.root_cause import EvidenceEvent, RootCauseCandidate, Recommendation
 from backend.app.schemas.github import GitHubCommitDetail, GitHubSourceEvidence
 from backend.app.schemas.sentry import SentryEvidence
+from backend.app.schemas.prometheus import PrometheusEvidence
 
 
 IncidentSeverity = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
@@ -63,6 +64,8 @@ class IncidentDetails(Incident):
     environment_name: Optional[str] = None
     sentryEvidence: Optional[SentryEvidence] = None
     sentry_evidence: Optional[SentryEvidence] = None
+    prometheusEvidence: Optional[PrometheusEvidence] = None
+    prometheus_evidence: Optional[PrometheusEvidence] = None
 
 class TelemetryInput(BaseModel):
     error_rate: float

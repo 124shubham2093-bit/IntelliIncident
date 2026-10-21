@@ -24,6 +24,7 @@ from backend.app.api.routes import (
     github,
     projects,
     sentry,
+    prometheus,
 )
 
 # Initialize Sentry SDK for application error monitoring if SENTRY_DSN is configured
@@ -72,6 +73,7 @@ app.include_router(reports.router, prefix="/api")
 app.include_router(github.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
 app.include_router(sentry.router, prefix="/api")
+app.include_router(prometheus.router, prefix="/api")
 
 
 @app.get("/")

@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     SENTRY_DSN: Optional[str] = None
     SENTRY_TRACES_SAMPLE_RATE: float = 0.0
 
+    # Prometheus Integration — metrics telemetry and baseline deviation
+    PROMETHEUS_URL: str = "http://localhost:9090"
+
     ENVIRONMENT: str = "development"
 
     model_config = SettingsConfigDict(
