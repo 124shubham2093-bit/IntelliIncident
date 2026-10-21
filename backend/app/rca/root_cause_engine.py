@@ -48,6 +48,7 @@ class RootCauseEngine:
         github_commits: Optional[List[Dict[str, Any]]] = None,
         sentry_evidence: Optional[Any] = None,
         prometheus_evidence: Optional[Any] = None,
+        jira_evidence: Optional[Any] = None,
     ) -> List[Dict[str, Any]]:
         logs = logs or []
         deployments = deployments or []
@@ -62,6 +63,7 @@ class RootCauseEngine:
             github_commits=github_commits,
             sentry_evidence=sentry_evidence,
             prometheus_evidence=prometheus_evidence,
+            jira_evidence=jira_evidence,
         )
 
         candidates = []

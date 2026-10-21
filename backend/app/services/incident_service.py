@@ -22,6 +22,8 @@ from backend.app.schemas.incident import IncidentCreatePayload
 from backend.app.schemas.github import GitHubSourceEvidence, GitHubSourceLocation, GitHubSourceLine
 from backend.app.schemas.sentry import SentryEvidence
 from backend.app.schemas.prometheus import PrometheusEvidence
+from backend.app.schemas.jira import JiraEvidence
+from backend.app.services.jira_service import JiraService
 from backend.app.services.stack_trace_parser import parse_stack_trace
 
 HEX_COMMIT_REGEX = re.compile(r"^[0-9a-fA-F]{7,40}$")
@@ -36,6 +38,7 @@ class IncidentService:
         self.github_service = GitHubService()
         self.sentry_service = SentryService()
         self.prometheus_service = PrometheusService()
+        self.jira_service = JiraService()
         self.project_service = ProjectService()
 
     @staticmethod
@@ -451,6 +454,14 @@ class IncidentService:
             incident_timestamp=inc_row["timestamp"],
         )
 
+        jira_evidence = await self.jira_service.get_incident_jira_evidence(
+            service=inc_row["service"],
+            incident_id=incident_id,
+            title=inc_row["title"],
+            incident_timestamp=inc_row["timestamp"],
+            environment=environment_name,
+        )
+
         root_causes = self.root_cause_engine.analyze(
             incident=incident_dict,
             metrics=metrics,
@@ -460,6 +471,7 @@ class IncidentService:
             github_commits=github_commits,
             sentry_evidence=sentry_evidence,
             prometheus_evidence=prometheus_evidence,
+            jira_evidence=jira_evidence,
         )
 
         # Recommendations based on top candidate
@@ -482,6 +494,7 @@ class IncidentService:
 
         s_ev_dump = sentry_evidence.model_dump() if hasattr(sentry_evidence, "model_dump") else sentry_evidence
         p_ev_dump = prometheus_evidence.model_dump() if hasattr(prometheus_evidence, "model_dump") else prometheus_evidence
+        j_ev_dump = jira_evidence.model_dump() if hasattr(jira_evidence, "model_dump") else jira_evidence
 
         return {
             "id": inc_row["id"],
@@ -518,6 +531,8 @@ class IncidentService:
             "sentry_evidence": s_ev_dump,
             "prometheusEvidence": p_ev_dump,
             "prometheus_evidence": p_ev_dump,
+            "jiraEvidence": j_ev_dump,
+            "jira_evidence": j_ev_dump,
             "deployedCommit": deployed_commit,
             "deployed_commit": deployed_commit,
             "environmentName": environment_name,
@@ -745,6 +760,13 @@ class IncidentService:
             service=payload.service,
             incident_timestamp=timestamp,
         )
+        jira_evidence = await self.jira_service.get_incident_jira_evidence(
+            service=payload.service,
+            incident_id=incident_id,
+            title=payload.title,
+            incident_timestamp=timestamp,
+            environment=env_name,
+        )
         root_causes = self.root_cause_engine.analyze(
             incident=temp_inc,
             metrics=metrics_dict,
@@ -754,6 +776,7 @@ class IncidentService:
             github_commits=github_commits,
             sentry_evidence=sentry_evidence,
             prometheus_evidence=prometheus_evidence,
+            jira_evidence=jira_evidence,
         )
         top_category = root_causes[0]["category"] if root_causes else "CODE_ERROR"
 

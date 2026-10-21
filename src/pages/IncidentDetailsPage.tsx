@@ -20,6 +20,7 @@ import { RecommendationsList } from '@/components/Incident/RecommendationsList';
 import { GitHubCommitCard } from '@/components/Incident/GitHubCommitCard';
 import { SentryEvidenceCard } from '@/components/Incident/SentryEvidenceCard';
 import { PrometheusEvidenceCard } from '@/components/Incident/PrometheusEvidenceCard';
+import { JiraEvidenceCard } from '@/components/Incident/JiraEvidenceCard';
 import { getIncidentById } from '@/api/incidents';
 import { IncidentDetails } from '@/types';
 
@@ -359,6 +360,14 @@ export const IncidentDetailsPage: React.FC = () => {
       {(incident.prometheusEvidence || incident.prometheus_evidence) && (
         <PrometheusEvidenceCard
           evidence={(incident.prometheusEvidence || incident.prometheus_evidence)!}
+          rootCauseCandidates={incident.rootCauseCandidates}
+        />
+      )}
+
+      {/* Jira Work Item & Ticket Evidence */}
+      {(incident.jiraEvidence || incident.jira_evidence) && (
+        <JiraEvidenceCard
+          evidence={(incident.jiraEvidence || incident.jira_evidence)!}
           rootCauseCandidates={incident.rootCauseCandidates}
         />
       )}

@@ -7,6 +7,7 @@ from backend.app.schemas.root_cause import EvidenceEvent, RootCauseCandidate, Re
 from backend.app.schemas.github import GitHubCommitDetail, GitHubSourceEvidence
 from backend.app.schemas.sentry import SentryEvidence
 from backend.app.schemas.prometheus import PrometheusEvidence
+from backend.app.schemas.jira import JiraEvidence
 
 
 IncidentSeverity = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
@@ -66,6 +67,8 @@ class IncidentDetails(Incident):
     sentry_evidence: Optional[SentryEvidence] = None
     prometheusEvidence: Optional[PrometheusEvidence] = None
     prometheus_evidence: Optional[PrometheusEvidence] = None
+    jiraEvidence: Optional[JiraEvidence] = None
+    jira_evidence: Optional[JiraEvidence] = None
 
 class TelemetryInput(BaseModel):
     error_rate: float

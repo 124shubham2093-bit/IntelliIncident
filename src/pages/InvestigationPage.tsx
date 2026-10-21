@@ -13,6 +13,7 @@ import { EvidenceTimeline } from '@/components/Incident/EvidenceTimeline';
 import { RootCauseList } from '@/components/Incident/RootCauseList';
 import { SentryEvidenceCard } from '@/components/Incident/SentryEvidenceCard';
 import { PrometheusEvidenceCard } from '@/components/Incident/PrometheusEvidenceCard';
+import { JiraEvidenceCard } from '@/components/Incident/JiraEvidenceCard';
 import { getIncidents, getIncidentById } from '@/api/incidents';
 import { Incident, IncidentDetails } from '@/types';
 
@@ -270,13 +271,37 @@ export const InvestigationPage: React.FC = () => {
 
               <div className="bg-slate-950/80 border border-slate-800 rounded p-3 flex items-start gap-2.5">
                 <MessageSquareWarning className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-xs font-mono font-semibold text-slate-200 block">
-                    Support Tickets
-                  </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Customer failure reports, webhook velocity
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-mono font-semibold text-slate-200 block">
+                      Support Tickets
+                    </span>
+                    {(incidentDetail.jiraEvidence || incidentDetail.jira_evidence)?.status === 'CONNECTED' && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30">
+                        Jira Active
+                      </span>
+                    )}
+                  </div>
+                  {(incidentDetail.jiraEvidence || incidentDetail.jira_evidence)?.primary_issue ? (
+                    <div className="mt-1 space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                        <span className="text-sky-400 font-semibold truncate">
+                          {(incidentDetail.jiraEvidence || incidentDetail.jira_evidence)!.primary_issue!.key}
+                        </span>
+                        <span className="text-slate-500">·</span>
+                        <span className="text-slate-300 truncate">
+                          {(incidentDetail.jiraEvidence || incidentDetail.jira_evidence)!.primary_issue!.summary}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 truncate" title={(incidentDetail.jiraEvidence || incidentDetail.jira_evidence)!.summary}>
+                        {(incidentDetail.jiraEvidence || incidentDetail.jira_evidence)!.summary}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Customer failure reports, webhook velocity
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -356,6 +381,14 @@ export const InvestigationPage: React.FC = () => {
           {(incidentDetail.prometheusEvidence || incidentDetail.prometheus_evidence) && (
             <PrometheusEvidenceCard
               evidence={(incidentDetail.prometheusEvidence || incidentDetail.prometheus_evidence)!}
+              rootCauseCandidates={incidentDetail.rootCauseCandidates}
+            />
+          )}
+
+          {/* Jira Work Item & Ticket Evidence */}
+          {(incidentDetail.jiraEvidence || incidentDetail.jira_evidence) && (
+            <JiraEvidenceCard
+              evidence={(incidentDetail.jiraEvidence || incidentDetail.jira_evidence)!}
               rootCauseCandidates={incidentDetail.rootCauseCandidates}
             />
           )}

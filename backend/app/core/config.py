@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     # Prometheus Integration — metrics telemetry and baseline deviation
     PROMETHEUS_URL: str = "http://localhost:9090"
 
+    # Jira Integration — issue tracking and incident ticket correlation
+    JIRA_BASE_URL: Optional[str] = None
+    JIRA_EMAIL: Optional[str] = None
+    JIRA_API_TOKEN: Optional[str] = None
+    JIRA_PROJECT_KEY: Optional[str] = None
+
     ENVIRONMENT: str = "development"
 
     model_config = SettingsConfigDict(
