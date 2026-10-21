@@ -140,6 +140,8 @@ export interface IncidentDetails extends Incident {
   sentryEvidence?: SentryEvidence | null;
   prometheusEvidence?: PrometheusEvidence | null;
   prometheus_evidence?: PrometheusEvidence | null;
+  jiraEvidence?: JiraEvidence | null;
+  jira_evidence?: JiraEvidence | null;
 }
 
 // GitHub Code Intelligence Types
@@ -417,6 +419,61 @@ export interface PrometheusEvidence {
   metrics?: Record<string, PrometheusMetricSample>;
   anomalies_detected: number;
   highest_correlation: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
+  summary: string;
+}
+
+// ==========================================
+// Jira Work Item and Incident Ticket Types
+// ==========================================
+
+export interface JiraStatus {
+  configured: boolean;
+  authenticated: boolean;
+  reachable: boolean;
+  base_url: string;
+  email?: string | null;
+  project_key?: string | null;
+  user_display_name?: string | null;
+  server_title?: string | null;
+  version?: string | null;
+  message: string;
+}
+
+export interface JiraIssue {
+  id: string;
+  key: string;
+  summary: string;
+  description?: string | null;
+  issue_type: string;
+  status: string;
+  priority: string;
+  project_key?: string | null;
+  project_name?: string | null;
+  labels: string[];
+  components: string[];
+  assignee?: string | null;
+  reporter?: string | null;
+  created?: string | null;
+  updated?: string | null;
+  resolution?: string | null;
+  url?: string | null;
+}
+
+export interface JiraCorrelationMatch {
+  matched_by: string[];
+  confidence_score: number;
+  explanation: string;
+}
+
+export interface JiraEvidence {
+  status: string; // "CONNECTED" | "NO_ISSUES_FOUND" | "NOT_CONFIGURED" | "UNAVAILABLE" | "AUTH_ERROR" | "ERROR"
+  base_url: string;
+  project_key?: string | null;
+  total_issues_found: number;
+  matched_issues: JiraIssue[];
+  primary_issue?: JiraIssue | null;
+  correlation?: JiraCorrelationMatch | null;
+  correlation_strength: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
   summary: string;
 }
 

@@ -20,6 +20,7 @@ class EvidenceCorrelator:
         github_commits: Optional[List[Dict[str, Any]]] = None,
         sentry_evidence: Optional[Any] = None,
         prometheus_evidence: Optional[Any] = None,
+        jira_evidence: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Evaluate factual evidence signals across 6 operational categories.
@@ -106,6 +107,23 @@ class EvidenceCorrelator:
         p_lat = p_metrics.get("p95_latency") or (p_data.get("p95_latency") if p_data else None)
         p_req = p_metrics.get("request_rate") or (p_data.get("request_rate") if p_data else None)
         p_avail = p_metrics.get("availability") or (p_data.get("availability") if p_data else None)
+
+        # Extract normalized Jira work item evidence if present
+        j_data = None
+        if jira_evidence:
+            j_data = (
+                jira_evidence.model_dump()
+                if hasattr(jira_evidence, "model_dump")
+                else (jira_evidence if isinstance(jira_evidence, dict) else None)
+            )
+
+        j_status = j_data.get("status") if j_data else None
+        j_is_active = bool(j_status == "CONNECTED")
+        j_issue = j_data.get("primary_issue") if (j_is_active and j_data) else None
+        j_key = j_issue.get("key") if j_issue else None
+        j_summary = j_issue.get("summary") if j_issue else ""
+        j_type = (j_issue.get("issue_type") or "").lower() if j_issue else ""
+        j_text = f"{j_key or ''} {j_summary} {j_issue.get('description') or ''}".lower() if j_issue else ""
 
         # 1. DEPLOYMENT Evidence
         dep_evidence = []
@@ -251,6 +269,22 @@ class EvidenceCorrelator:
                 )
                 dep_score += 0.15
 
+        # Jira Work Item Correlation for DEPLOYMENT
+        if j_is_active and j_issue:
+            if any(k in j_text for k in ["deploy", "release", "rollback", "migration", "version"]) or j_type in ("release", "deployment"):
+                dep_evidence.append(
+                    f"Jira issue {j_key} ('{j_summary}') tracks scheduled release/deployment activity ({j_issue.get('status')})."
+                )
+                dep_score += 0.15
+
+        # Quad-Source Cross-Correlation (GitHub Commit + Sentry Exception + Prometheus Metrics + Jira Ticket)
+        if github_commits and s_is_active and p_is_active and j_is_active and j_issue:
+            short_c = github_commits[0].get("short_sha") if isinstance(github_commits[0], dict) else getattr(github_commits[0], "short_sha", "HEAD")
+            dep_evidence.append(
+                f"Quad-Source Cross-Correlation: Deployment {short_c} verified across GitHub code changes, Sentry exception '{s_exc_type or 'runtime error'}', Prometheus metric deviations, and Jira ticket {j_key}."
+            )
+            dep_score += 0.20
+
         # 2. DATABASE Evidence
         db_evidence = []
         db_score = 0.1
@@ -312,6 +346,14 @@ class EvidenceCorrelator:
                 f"Prometheus metrics confirm P95 query/response latency spike to {obs_lat:.0f}ms{base_str}."
             )
             db_score += 0.20
+
+        # Jira Database Work Item Correlation
+        if j_is_active and j_issue:
+            if any(k in j_text for k in ["database", "sql", "postgres", "pool", "query", "deadlock", "lock"]):
+                db_evidence.append(
+                    f"Jira issue {j_key} ('{j_summary}') documents database connection pool or query contention bottleneck."
+                )
+                db_score += 0.15
 
         # 3. INFRASTRUCTURE Evidence
         infra_evidence = []
@@ -377,6 +419,14 @@ class EvidenceCorrelator:
                     f"Prometheus telemetry confirms memory elevation at {obs_mem:.1f}%{base_str} approaching limit."
                 )
                 infra_score += 0.20
+
+        # Jira Infrastructure Work Item Correlation
+        if j_is_active and j_issue:
+            if any(k in j_text for k in ["memory", "cpu", "disk", "oom", "resource", "saturation", "infra", "host", "pod"]):
+                infra_evidence.append(
+                    f"Jira issue {j_key} ('{j_summary}') confirms infrastructure resource contention or compute saturation."
+                )
+                infra_score += 0.15
 
         # 4. CODE_ERROR Evidence
         code_evidence = []
@@ -490,6 +540,14 @@ class EvidenceCorrelator:
                 )
                 code_score += 0.15
 
+        # Jira Bug / Defect Ticket Evidence for CODE_ERROR
+        if j_is_active and j_issue:
+            if any(k in j_text for k in ["bug", "defect", "nullpointer", "exception", "crash", "error", "fault"]) or j_type in ("bug", "defect"):
+                code_evidence.append(
+                    f"Jira issue {j_key} ('{j_summary}') tracks active bug/runtime defect ({j_issue.get('status')}, priority: {j_issue.get('priority')})."
+                )
+                code_score += 0.15
+
         # Correlate stack trace / error logs with files changed in deployment commits
         if github_commits:
             matched = False
@@ -565,6 +623,14 @@ class EvidenceCorrelator:
             )
             traffic_score += 0.25
 
+        # Jira Traffic Work Item Correlation
+        if j_is_active and j_issue:
+            if any(k in j_text for k in ["traffic", "spike", "load", "surge", "capacity", "volume", "throttling"]):
+                traffic_evidence.append(
+                    f"Jira issue {j_key} ('{j_summary}') documents customer traffic surge or capacity overload."
+                )
+                traffic_score += 0.15
+
         # 6. NETWORK Evidence
         net_evidence = []
         net_score = 0.1
@@ -613,6 +679,14 @@ class EvidenceCorrelator:
                     f"Prometheus telemetry recorded elevated latency without local CPU saturation, indicating external network/service delay."
                 )
                 net_score += 0.20
+
+        # Jira Network Work Item Correlation
+        if j_is_active and j_issue:
+            if any(k in j_text for k in ["network", "dns", "socket", "gateway", "upstream", "connection refused", "timeout"]):
+                net_evidence.append(
+                    f"Jira issue {j_key} ('{j_summary}') reports upstream network or gateway transport disruption."
+                )
+                net_score += 0.15
 
         return {
             "DEPLOYMENT": {
