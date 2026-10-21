@@ -10,23 +10,23 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({ recomm
   const getPriorityBadge = (priority: Recommendation['priority']) => {
     switch (priority) {
       case 'CRITICAL':
-        return 'text-rose-400 bg-rose-500/10 border-rose-500/30';
+        return 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900/60';
       case 'HIGH':
-        return 'text-orange-400 bg-orange-500/10 border-orange-500/30';
+        return 'text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-900/60';
       case 'MEDIUM':
-        return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+        return 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/60';
       default:
-        return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
+        return 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/60';
     }
   };
 
   return (
-    <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-        <h3 className="text-sm font-semibold text-slate-100 uppercase tracking-wider font-mono">
-          Recommended Investigation & Mitigation Actions
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5 shadow-xs">
+      <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          Recommended Actions
         </h3>
-        <span className="text-[11px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+        <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
           {recommendations.length} Actions
         </span>
       </div>
@@ -35,19 +35,19 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({ recomm
         {recommendations.map((rec, idx) => (
           <div
             key={rec.id}
-            className="bg-slate-950/70 border border-slate-800 rounded-lg p-4 hover:border-slate-700 transition-colors"
+            className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-lg p-4 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-teal-400 shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-semibold text-slate-400">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                       #{idx + 1}
                     </span>
-                    <h4 className="text-sm font-semibold text-slate-100">{rec.title}</h4>
+                    <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{rec.title}</h4>
                   </div>
-                  <p className="mt-1 text-xs text-slate-300 font-sans leading-relaxed">
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                     {rec.description}
                   </p>
                 </div>
@@ -55,28 +55,28 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({ recomm
 
               <div className="flex items-center gap-2">
                 <span
-                  className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${getPriorityBadge(
+                  className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${getPriorityBadge(
                     rec.priority
                   )}`}
                 >
-                  {rec.priority}
+                  {rec.priority} Priority
                 </span>
-                <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 shadow-2xs">
                   {rec.category}
                 </span>
               </div>
             </div>
 
             {rec.actionCmd && (
-              <div className="mt-3 bg-black/60 rounded p-2.5 border border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2 overflow-x-auto text-[11px] font-mono text-teal-300">
+              <div className="mt-3 bg-slate-900 dark:bg-slate-950 rounded-md p-2.5 flex items-center justify-between text-xs font-mono text-slate-200 border dark:border-slate-800">
+                <div className="flex items-center gap-2 overflow-x-auto">
                   <Terminal className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <code>{rec.actionCmd}</code>
                 </div>
                 <button
                   type="button"
                   onClick={() => navigator.clipboard?.writeText(rec.actionCmd || '')}
-                  className="ml-2 text-[10px] font-mono text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded bg-slate-800 border border-slate-700 shrink-0 cursor-pointer"
+                  className="ml-2 text-[11px] text-slate-300 hover:text-white px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 shrink-0 cursor-pointer"
                   title="Copy command to clipboard"
                 >
                   Copy
@@ -85,11 +85,6 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({ recomm
             )}
           </div>
         ))}
-      </div>
-
-      <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 font-mono">
-        <span>Remediation actions correlated from service operational playbooks</span>
-        <span className="text-teal-400">Playbook Engine</span>
       </div>
     </div>
   );

@@ -28,19 +28,19 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
   const getMetricIcon = (metricKey: string) => {
     switch (metricKey) {
       case 'cpu_utilization':
-        return <Cpu className="w-3.5 h-3.5 text-cyan-400" />;
+        return <Cpu className="w-3.5 h-3.5 text-blue-600" />;
       case 'memory_utilization':
-        return <HardDrive className="w-3.5 h-3.5 text-indigo-400" />;
+        return <HardDrive className="w-3.5 h-3.5 text-indigo-600" />;
       case 'request_rate':
-        return <BarChart3 className="w-3.5 h-3.5 text-blue-400" />;
+        return <BarChart3 className="w-3.5 h-3.5 text-blue-600" />;
       case 'error_rate':
-        return <Flame className="w-3.5 h-3.5 text-rose-400" />;
+        return <Flame className="w-3.5 h-3.5 text-red-600" />;
       case 'p95_latency':
-        return <Clock className="w-3.5 h-3.5 text-amber-400" />;
+        return <Clock className="w-3.5 h-3.5 text-amber-600" />;
       case 'availability':
-        return <Radio className="w-3.5 h-3.5 text-emerald-400" />;
+        return <Radio className="w-3.5 h-3.5 text-emerald-600" />;
       default:
-        return <Activity className="w-3.5 h-3.5 text-teal-400" />;
+        return <Activity className="w-3.5 h-3.5 text-blue-600" />;
     }
   };
 
@@ -48,34 +48,34 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
     switch (status) {
       case 'CONNECTED':
         return (
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-            <span>Connected & Correlated</span>
+          <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Connected & Scraped</span>
           </span>
         );
       case 'NOT_CONFIGURED':
         return (
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+          <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
             Unconfigured
           </span>
         );
       case 'UNAVAILABLE':
         return (
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1">
-            <AlertTriangle className="w-3 h-3 text-rose-400" />
+          <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
             <span>Prometheus Offline</span>
           </span>
         );
       case 'NO_METRICS_FOUND':
         return (
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1">
-            <AlertTriangle className="w-3 h-3 text-amber-400" />
+          <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
             <span>No Metrics In Range</span>
           </span>
         );
       default:
         return (
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+          <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
             {status}
           </span>
         );
@@ -100,7 +100,6 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
     );
   };
 
-  // Compile list of metric samples
   const metricItems: { key: string; sample: PrometheusMetricSample }[] = [];
   if (evidence.cpu_utilization) metricItems.push({ key: 'cpu_utilization', sample: evidence.cpu_utilization });
   if (evidence.memory_utilization) metricItems.push({ key: 'memory_utilization', sample: evidence.memory_utilization });
@@ -110,16 +109,16 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
   if (evidence.availability) metricItems.push({ key: 'availability', sample: evidence.availability });
 
   return (
-    <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-5 space-y-4">
+    <div className="bg-slate-50 border border-slate-200 rounded-lg p-5 space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-amber-400" />
-          <h3 className="text-sm font-semibold text-slate-100 font-mono uppercase tracking-wider">
-            Prometheus Metric Telemetry Intelligence
+          <Activity className="w-4 h-4 text-blue-600" />
+          <h3 className="text-sm font-semibold text-slate-900">
+            Prometheus Metric Telemetry
           </h3>
           {evidence.service && (
-            <span className="text-xs font-mono text-slate-400 hidden md:inline">
+            <span className="text-xs text-slate-500 hidden md:inline">
               (Service: {evidence.service})
             </span>
           )}
@@ -128,81 +127,61 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
       </div>
 
       {/* Overview Metadata Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs font-mono">
-        <div className="bg-slate-950/80 p-2.5 rounded border border-slate-800/80">
-          <span className="text-[10px] text-slate-400 block uppercase">Anomalies Detected</span>
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+        <div className="bg-white p-3 rounded-md border border-slate-200">
+          <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">Anomalies Detected</span>
           <span
-            className={`font-bold text-sm block mt-0.5 ${
-              evidence.anomalies_detected > 0 ? 'text-rose-400' : 'text-emerald-400'
+            className={`font-bold text-base block mt-0.5 ${
+              evidence.anomalies_detected > 0 ? 'text-red-600' : 'text-emerald-700'
             }`}
           >
             {evidence.anomalies_detected}
           </span>
         </div>
-        <div className="bg-slate-950/80 p-2.5 rounded border border-slate-800/80">
-          <span className="text-[10px] text-slate-400 block uppercase">Peak Correlation</span>
+        <div className="bg-white p-3 rounded-md border border-slate-200">
+          <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">Peak Correlation</span>
           <span
             className={`font-semibold block mt-0.5 truncate ${
               evidence.highest_correlation === 'HIGH'
-                ? 'text-rose-400 font-bold'
+                ? 'text-red-600 font-bold'
                 : evidence.highest_correlation === 'MEDIUM'
-                ? 'text-amber-400'
+                ? 'text-amber-700'
                 : evidence.highest_correlation === 'LOW'
-                ? 'text-blue-400'
-                : 'text-slate-400'
+                ? 'text-blue-700'
+                : 'text-slate-500'
             }`}
           >
             {evidence.highest_correlation || 'NONE'}
           </span>
         </div>
-        <div className="bg-slate-950/80 p-2.5 rounded border border-slate-800/80">
-          <span className="text-[10px] text-slate-400 block uppercase">Prometheus Host</span>
-          <span className="text-cyan-400 font-semibold block mt-0.5 truncate" title={evidence.url}>
+        <div className="bg-white p-3 rounded-md border border-slate-200">
+          <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">Prometheus Host</span>
+          <span className="text-slate-800 font-mono text-[11px] font-medium block mt-0.5 truncate" title={evidence.url}>
             {evidence.url || 'None'}
           </span>
         </div>
-        <div className="bg-slate-950/80 p-2.5 rounded border border-slate-800/80">
-          <span className="text-[10px] text-slate-400 block uppercase">Time Window</span>
-          <span className="text-slate-300 font-semibold block mt-0.5 truncate">
-            {evidence.time_window ? 'T-60m Baseline vs Incident' : 'Default / Live'}
+        <div className="bg-white p-3 rounded-md border border-slate-200">
+          <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider block">Time Window</span>
+          <span className="text-slate-800 font-medium block mt-0.5 truncate">
+            {evidence.time_window ? 'Baseline vs Incident Window' : 'Default Scrape'}
           </span>
         </div>
       </div>
 
-      {/* Summary / Message */}
-      <p className="text-xs text-slate-300 font-sans italic bg-slate-950/50 p-2.5 rounded border border-slate-800/60">
+      {/* Summary Message */}
+      <p className="text-xs text-slate-700 bg-white p-3 rounded-md border border-slate-200 leading-relaxed">
         {evidence.summary}
       </p>
-
-      {/* Time Window Details Banner (if present) */}
-      {evidence.time_window && (
-        <div className="bg-slate-950/40 p-2 rounded border border-slate-800/40 text-[11px] font-mono text-slate-400 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <span className="text-slate-500">Baseline Window: </span>
-            <span className="text-slate-300">
-              {new Date(evidence.time_window.baseline_start).toLocaleTimeString()} -{' '}
-              {new Date(evidence.time_window.baseline_end).toLocaleTimeString()}
-            </span>
-          </div>
-          <div>
-            <span className="text-slate-500">Incident Window: </span>
-            <span className="text-amber-300">
-              {new Date(evidence.time_window.incident_start).toLocaleTimeString()} -{' '}
-              {new Date(evidence.time_window.incident_end).toLocaleTimeString()}
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* Metric Telemetry Samples */}
       {metricItems.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-mono text-slate-300 font-semibold">
-            <Activity className="w-3.5 h-3.5 text-amber-400" />
+          <div className="flex items-center gap-1.5 text-xs text-slate-800 font-semibold">
+            <Activity className="w-3.5 h-3.5 text-blue-600" />
             <span>Evaluated Metric Deviations ({metricItems.length})</span>
           </div>
 
-          <div className="bg-slate-950 rounded border border-slate-800 overflow-hidden divide-y divide-slate-800/60 font-mono text-xs">
+          <div className="bg-white rounded-md border border-slate-200 overflow-hidden divide-y divide-slate-100 text-xs">
             {metricItems.map(({ key, sample }) => {
               const cited = isMetricCitedInRCA(key);
               const isExpanded = expandedMetric === key;
@@ -211,11 +190,11 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
               return (
                 <div
                   key={key}
-                  className={`p-3 space-y-2 hover:bg-slate-900/30 transition-colors ${
+                  className={`p-3 space-y-2 hover:bg-slate-50 transition-colors ${
                     cited
-                      ? 'bg-amber-950/10 border-l-2 border-amber-500'
+                      ? 'bg-amber-50/40 border-l-2 border-amber-500'
                       : hasAnomaly
-                      ? 'border-l-2 border-rose-500'
+                      ? 'border-l-2 border-red-500'
                       : ''
                   }`}
                 >
@@ -224,38 +203,25 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
                       <div className="mt-0.5 shrink-0">{getMetricIcon(key)}</div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-slate-200">{sample.metric_name}</span>
+                          <span className="font-semibold text-slate-900">{sample.metric_name}</span>
                           {hasAnomaly ? (
-                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 font-medium">
                               Anomaly
                             </span>
                           ) : (
-                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 font-medium">
                               Normal
                             </span>
                           )}
                           {cited && (
-                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 font-medium">
                               RCA Cited
-                            </span>
-                          )}
-                          {sample.correlation_strength !== 'NONE' && (
-                            <span
-                              className={`text-[10px] font-mono px-1.5 py-0.2 rounded border ${
-                                sample.correlation_strength === 'HIGH'
-                                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                                  : sample.correlation_strength === 'MEDIUM'
-                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                                  : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                              }`}
-                            >
-                              {sample.correlation_strength} correlation
                             </span>
                           )}
                         </div>
 
                         {sample.message && (
-                          <span className="text-[11px] text-slate-400 block mt-0.5">
+                          <span className="text-[11px] text-slate-500 block mt-0.5">
                             {sample.message}
                           </span>
                         )}
@@ -265,8 +231,8 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
                     {/* Numeric Comparison */}
                     <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto text-right">
                       <div>
-                        <span className="text-[10px] text-slate-500 block uppercase">Baseline</span>
-                        <span className="text-slate-300 font-semibold">
+                        <span className="text-[10px] text-slate-400 block uppercase font-medium">Baseline</span>
+                        <span className="text-slate-700 font-semibold font-mono">
                           {sample.baseline_value !== null && sample.baseline_value !== undefined
                             ? `${sample.baseline_value.toFixed(1)}${sample.unit}`
                             : 'N/A'}
@@ -274,10 +240,10 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
                       </div>
 
                       <div>
-                        <span className="text-[10px] text-slate-500 block uppercase">Observed</span>
+                        <span className="text-[10px] text-slate-400 block uppercase font-medium">Observed</span>
                         <span
-                          className={`font-semibold ${
-                            hasAnomaly ? 'text-rose-400' : 'text-slate-200'
+                          className={`font-semibold font-mono ${
+                            hasAnomaly ? 'text-red-600' : 'text-slate-900'
                           }`}
                         >
                           {sample.observed_value !== null && sample.observed_value !== undefined
@@ -288,12 +254,12 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
 
                       {sample.deviation_pct !== null && sample.deviation_pct !== undefined && (
                         <div className="min-w-[65px]">
-                          <span className="text-[10px] text-slate-500 block uppercase">Deviation</span>
+                          <span className="text-[10px] text-slate-400 block uppercase font-medium">Deviation</span>
                           <span
-                            className={`font-bold flex items-center justify-end gap-0.5 ${
+                            className={`font-bold font-mono flex items-center justify-end gap-0.5 ${
                               Math.abs(sample.deviation_pct) >= 20
-                                ? 'text-rose-400'
-                                : 'text-emerald-400'
+                                ? 'text-red-600'
+                                : 'text-emerald-700'
                             }`}
                           >
                             {sample.deviation_pct > 0 ? '+' : ''}
@@ -304,7 +270,7 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
 
                       <button
                         onClick={() => setExpandedMetric(isExpanded ? null : key)}
-                        className="text-slate-400 hover:text-slate-200 transition-colors p-1"
+                        className="text-slate-400 hover:text-slate-600 transition-colors p-1"
                         title={isExpanded ? 'Collapse PromQL' : 'View PromQL'}
                       >
                         {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -314,12 +280,12 @@ export const PrometheusEvidenceCard: React.FC<PrometheusEvidenceCardProps> = ({
 
                   {/* PromQL Query Expansion */}
                   {isExpanded && (
-                    <div className="bg-slate-900/80 p-2.5 rounded border border-slate-800 text-[11px] space-y-1 mt-1">
-                      <div className="flex items-center justify-between text-[10px] text-slate-500 uppercase">
-                        <span>Executed PromQL Expression</span>
+                    <div className="bg-slate-900 p-2.5 rounded-md text-xs text-slate-200 space-y-1 mt-1 font-mono">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 uppercase">
+                        <span>PromQL Query</span>
                         <span>Unit: {sample.unit}</span>
                       </div>
-                      <pre className="text-cyan-300 bg-slate-950 p-2 rounded border border-slate-800/80 overflow-x-auto whitespace-pre font-mono">
+                      <pre className="text-blue-300 overflow-x-auto whitespace-pre">
                         {sample.query}
                       </pre>
                     </div>

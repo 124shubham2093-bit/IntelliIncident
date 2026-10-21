@@ -20,59 +20,42 @@ export const KpiCard: React.FC<KpiCardProps> = ({
   subtitle,
   icon: Icon,
   trend,
-  accentColor = 'teal',
 }) => {
-  const accentBorder = {
-    teal: 'border-l-teal-500',
-    rose: 'border-l-rose-500',
-    amber: 'border-l-amber-500',
-    blue: 'border-l-blue-500',
-  }[accentColor];
-
-  const iconBg = {
-    teal: 'bg-teal-500/10 text-teal-400',
-    rose: 'bg-rose-500/10 text-rose-400',
-    amber: 'bg-amber-500/10 text-amber-400',
-    blue: 'bg-blue-500/10 text-blue-400',
-  }[accentColor];
-
   return (
-    <div
-      className={`bg-slate-900/80 border border-slate-800 rounded-lg p-5 border-l-4 ${accentBorder} shadow-sm relative overflow-hidden`}
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider font-mono">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-5 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors flex flex-col justify-between">
+      <div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             {title}
-          </p>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-bold font-mono text-slate-100 tracking-tight">
-              {value}
-            </span>
-            {trend && (
-              <span
-                className={`text-xs font-mono font-medium ${
-                  trend.isPositive ? 'text-emerald-400' : 'text-rose-400'
-                }`}
-              >
-                {trend.value}
-              </span>
-            )}
+          </span>
+          <div className="w-8 h-8 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-400">
+            <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           </div>
-          {subtitle && <p className="mt-1 text-xs text-slate-400">{subtitle}</p>}
         </div>
-        <div className={`p-2.5 rounded-md ${iconBg}`}>
-          <Icon className="w-5 h-5" />
+
+        <div className="mt-3 flex items-baseline gap-2.5">
+          <span className="text-2xl sm:text-3xl font-bold font-sans text-slate-900 dark:text-slate-100 tracking-tight">
+            {value}
+          </span>
+          {trend && (
+            <span
+              className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                trend.isPositive
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
+                  : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900/60'
+              }`}
+            >
+              {trend.value}
+            </span>
+          )}
         </div>
+        {subtitle && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
       </div>
 
       {trend?.label && (
-        <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
-          <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-            {trend.label}
-          </span>
-          <span className="text-[10px] font-mono text-slate-500">Telemetry Active</span>
+        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
+          <span>{trend.label}</span>
+          <span className="font-medium text-slate-500 dark:text-slate-400">Active</span>
         </div>
       )}
     </div>
